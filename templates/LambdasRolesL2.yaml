@@ -401,3 +401,7 @@ Outputs:
     ScheduledRuleArn:
       Description: The ARN of the scheduled rule
       Value: !GetAtt ScheduledRule.Arn
+
+    ScheduledRuleName:
+      Description: The Name of the scheduled rule
+      Value: !Ref ScheduledRule

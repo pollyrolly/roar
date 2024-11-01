@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: "CloudFormation Template to deploy infrastructure for an automated Amazon Redshift review"
+Description: "CloudFormation Template to deploy infrastructure for Redshift Operational Automated Review (ROAR) app"
 Parameters:
   RedshiftClusterEndpoint:
     Description: The endpoint of the evaluated Redshift Cluster.
@@ -86,15 +86,48 @@ Mappings:
       Value: reignite24-error-topic
     RoleArn:
       Value: arn:aws:iam::603836437137:role/reignite24-read-global
+    Repo:
+      Value:  https://github.com/pollyrolly/roar.git
 
 Resources:
 
+  CustomMasterKey:
+    Type: AWS::KMS::Key
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties: 
+      Description: "Custom Master Key for encrypting content"
+      Tags:
+        - Key: Application
+          Value: ROAR
+        - Key: Owner
+          Value: TeamROAR
+      KeyPolicy:
+        Version: 2012-10-17
+        Id: key-policy-reignite24
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+
+
   ErrorSNSTopic:
     Type: AWS::SNS::Topic
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
     Properties:
       TopicName: !Sub 
         - '${TopicPrefix}-${AWS::AccountId}-${AWS::Region}'
         - TopicPrefix: !FindInMap [VariableMap, ErrorTopicName, Value]
+      KmsMasterKeyId: !GetAtt CustomMasterKey.Arn
+      Tags:
+        - Key: Application
+          Value: ROAR
+        - Key: Owner
+          Value: TeamROAR
   
   EmailSubscription:
     Type: AWS::SNS::Subscription
@@ -103,8 +136,11 @@ Resources:
       Endpoint: !Ref EmailAddress
       Protocol: email
 
+
   SNSTopicPolicy:
     Type: AWS::SNS::TopicPolicy
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
     Properties:
       PolicyDocument:
         Version: '2012-10-17'
@@ -118,20 +154,25 @@ Resources:
               StringEquals: 
                 AWS:SourceOwner: !Sub '${AWS::AccountId}'
       Topics:
-        - !GetAtt ErrorSNSTopic.TopicArn 
+        - !GetAtt ErrorSNSTopic.TopicArn
 
   S3BucketLocal:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain    
     Properties:
       BucketName: !Sub 
         - '${BucketNamePrefix}-${AWS::AccountId}-${AWS::Region}'
         - BucketNamePrefix: !FindInMap [VariableMap, S3BucketNameLocal, Value]
-      AccessControl: Private
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
+      Tags:
+        - Key: Application
+          Value: ROAR
+        - Key: Owner
+          Value: TeamROAR
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -139,106 +180,99 @@ Resources:
         RestrictPublicBuckets: true
       VersioningConfiguration:
         Status: Enabled
-
+      ObjectLockEnabled: false
+      
+      
   LambdaAuthorizeRole:
     Type: AWS::IAM::Role
     DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete 
     Properties: 
       Description: IAM Role for lambda to authorize deployment
-      RoleName: reignite24-authorize-lambda-role
+      Tags:
+        - Key: Application
+          Value: ROAR
+        - Key: Owner
+          Value: TeamROAR
+      RoleName: !Sub 'reignite24-authorize-lambda-role-${AWS::Region}'
       MaxSessionDuration: 3600
       AssumeRolePolicyDocument:
-        Version: 2012-10-17
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
-              Service:
-                - lambda.amazonaws.com
-            Action:
-              - sts:AssumeRole
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
       Path: /
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
       Policies:
         - PolicyName: assume-role-policy
           PolicyDocument:
-            Version: 2012-10-17
+            Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action: sts:AssumeRole
-                Resource: arn:aws:iam::603836437137:role/reignite24-read-global
-        - PolicyName: copy-outputAccessPolicy
+                Resource: !Sub 'arn:${AWS::Partition}:iam::603836437137:role/reignite24-read-global'
+        - PolicyName: s3-access-policy
           PolicyDocument:
-            Version: 2012-10-17
+            Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
                   - s3:GetBucketLocation
                   - s3:ListBucket
                   - s3:PutObject
-                Resource:
-                  - !Sub 
-                    - arn:${AWS::Partition}:s3:::${BnL}/*
-                    - BnL: !Ref S3BucketLocal
-                  - !Sub 
-                    - arn:${AWS::Partition}:s3:::${BnL}/${ScP}*
-                    - ScP: !FindInMap [VariableMap, ScriptPath, Value]
-                      BnL: !Ref S3BucketLocal
-                  - !Sub 
-                    - arn:${AWS::Partition}:s3:::${BnL}/${ScP}
-                    - ScP: !FindInMap [VariableMap, ScriptPath, Value]
-                      BnL: !Ref S3BucketLocal
-                  - !Sub 
-                    - arn:${AWS::Partition}:s3:::${BnL}/${ScP}*
-                    - ScP: !FindInMap [VariableMap, LayerPath, Value]
-                      BnL: !Ref S3BucketLocal
-                  - !Sub 
-                    - arn:${AWS::Partition}:s3:::${BnL}/${ScP}
-                    - ScP: !FindInMap [VariableMap, LayerPath, Value]
-                      BnL: !Ref S3BucketLocal
-                  - !Sub 
-                    - arn:${AWS::Partition}:s3:::${BnL}/${ScP}*
-                    - ScP: !FindInMap [VariableMap, TemplatesPath, Value]
-                      BnL: !Ref S3BucketLocal
-                  - !Sub 
-                    - arn:${AWS::Partition}:s3:::${BnL}/${ScP}
-                    - ScP: !FindInMap [VariableMap, TemplatesPath, Value]
-                      BnL: !Ref S3BucketLocal
-                  - !Sub 
-                    - arn:${AWS::Partition}:s3:::${BnL}/${ScP}*
-                    - ScP: !FindInMap [VariableMap, ConfigPath, Value]
-                      BnL: !Ref S3BucketLocal
-                  - !Sub 
-                    - arn:${AWS::Partition}:s3:::${BnL}/${ScP}
-                    - ScP: !FindInMap [VariableMap, ConfigPath, Value]
-                      BnL: !Ref S3BucketLocal
-                  - !Sub 
-                    - arn:${AWS::Partition}:s3:::${BnL}
-                    - BnL: !Ref S3BucketLocal
-        - PolicyName: LambdaCloudFormationPolicy
+                Resource: !Sub 
+                  - |
+                    arn:${AWS::Partition}:s3:::${BnL}
+                    arn:${AWS::Partition}:s3:::${BnL}/*
+                    arn:${AWS::Partition}:s3:::${BnL}/${ScriptPath}*
+                    arn:${AWS::Partition}:s3:::${BnL}/${LayerPath}*
+                    arn:${AWS::Partition}:s3:::${BnL}/${TemplatesPath}*
+                    arn:${AWS::Partition}:s3:::${BnL}/${ConfigPath}*
+                  - BnL: !Ref S3BucketLocal
+                    ScriptPath: !FindInMap [VariableMap, ScriptPath, Value]
+                    LayerPath: !FindInMap [VariableMap, LayerPath, Value]
+                    TemplatesPath: !FindInMap [VariableMap, TemplatesPath, Value]
+                    ConfigPath: !FindInMap [VariableMap, ConfigPath, Value]
+        - PolicyName: cloudformation-policy
           PolicyDocument:
-            Version: 2012-10-17
+            Version: '2012-10-17'
             Statement:
               - Effect: Allow
-                Action:
-                  - s3:*
+                Action: s3:*
                 Resource:
-                  - !Sub arn:aws:s3:::cloudformation-custom-resource-response-${AWS::Region}
-                  - !Sub arn:aws:s3:::cloudformation-waitcondition-${AWS::Region}
-                  - !Sub arn:aws:s3:::cloudformation-custom-resource-response-${AWS::Region}/*
-                  - !Sub arn:aws:s3:::cloudformation-waitcondition-${AWS::Region}/*
-  
-  LambdaAuthorizeFunction:
+                  - !Sub 'arn:${AWS::Partition}:s3:::cloudformation-custom-resource-response-${AWS::Region}'
+                  - !Sub 'arn:${AWS::Partition}:s3:::cloudformation-waitcondition-${AWS::Region}'
+                  - !Sub 'arn:${AWS::Partition}:s3:::cloudformation-custom-resource-response-${AWS::Region}/*'
+                  - !Sub 'arn:${AWS::Partition}:s3:::cloudformation-waitcondition-${AWS::Region}/*'
+
+
+  LambdaAuthorizeCopyFunction:
     Type: AWS::Lambda::Function
     DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W58
+            reason: Permissions provided by IAM role
     Properties: 
       Description: Lambda to authorize deployment
       Handler: index.lambda_handler
       Runtime: python3.12
+      Tags:
+        - Key: Application
+          Value: ROAR
+        - Key: Owner
+          Value: TeamROAR
       Architectures:
         - x86_64
       Layers:
-        - !Sub arn:aws:lambda:${AWS::Region}:017000801446:layer:AWSLambdaPowertoolsPythonV2:71
+        - !Sub arn:${AWS::Partition}:lambda:${AWS::Region}:017000801446:layer:AWSLambdaPowertoolsPythonV2:71
+        - !Sub arn:${AWS::Partition}:lambda:${AWS::Region}:553035198032:layer:git-lambda2:8
+
       Role: !GetAtt LambdaAuthorizeRole.Arn
       Timeout: 900
       MemorySize: 10000
@@ -253,6 +287,7 @@ Resources:
           LAYER_PREFIX:  !FindInMap [VariableMap, LayerPath, Value] 
           DESTINATION_BUCKET: !Ref S3BucketLocal 
           CONFIG_PREFIX: !FindInMap [VariableMap, ConfigPath, Value] 
+          REPO: !FindInMap [VariableMap, Repo, Value] 
           POWERTOOLS_LOG_LEVEL: INFO
           POWERTOOLS_SERVICE_NAME: LambdaRolesL1
       Code:
@@ -262,171 +297,373 @@ Resources:
           import json
           import os
           import cfnresponse
+          import os
+          import subprocess
           from aws_lambda_powertools import Logger
           from aws_lambda_powertools.utilities.typing import LambdaContext
           logger = Logger()       
 
-          role_arn = os.environ['ROLE_ARN']
-          client = boto3.client('sts')
-          aws_account_id = client.get_caller_identity()["Account"]
-          print(aws_account_id)
-          sts_client = boto3.client('sts')
-          assumed_role_object=sts_client.assume_role(
-              RoleArn=role_arn,
-              RoleSessionName="AssumeRoleSession1"
-          )
-          credentials=assumed_role_object['Credentials']
-          s3_resource_g = boto3.resource(
-              's3',
-              aws_access_key_id=credentials['AccessKeyId'],
-              aws_secret_access_key=credentials['SecretAccessKey'],
-              aws_session_token=credentials['SessionToken'],
-          )
-          s3_client_g = boto3.client(
-              's3',
-              aws_access_key_id=credentials['AccessKeyId'],
-              aws_secret_access_key=credentials['SecretAccessKey'],
-              aws_session_token=credentials['SessionToken'],
-          )
-          s3_resource = boto3.resource(
-              's3'
-          )
-          s3_client = boto3.client(
-              's3'
-          )
+          class AuthorizeAndCopy():
 
-          def write_string_to_s3(string_data, bucket_name, file_name):
-              try:
-                  s3_client.put_object(
-                      Body=string_data.encode('utf-8'),
-                      Bucket=bucket_name,
-                      Key=file_name
+              def __init__(self, role_arn, target_bucket, source_bucket, 
+                          templates_prefix, config_prefix, script_prefix, 
+                          layer_prefix, logger):
+                  self.role_arn = role_arn
+                  self.logger = logger
+                  self.target_bucket = target_bucket
+                  self.source_bucket = source_bucket
+                  self.s3_resource_g = None
+                  self.s3_client_g = None
+                  self.s3_client = None
+                  self.s3_resource = None
+                  self.global_s3_handles()
+                  self.local_s3_handles()
+                  self.account_id = self.account_id()
+                  self.templates_prefix = templates_prefix
+                  self.customer_prefix = "eecustomers/"
+                  self.config_prefix = config_prefix
+                  self.script_prefix = script_prefix
+                  self.layer_prefix = layer_prefix
+                  self.repo = os.environ["REPO"]  
+
+              def clone_repo(self, destination_folder=None):
+                  try:
+                      if destination_folder:
+                          # Create the destination folder if it doesn't exist
+                          os.makedirs(destination_folder, exist_ok=True)
+                          # Change to the destination directory
+                          os.chdir(destination_folder)
+                      
+                      # Clone the repository
+                      subprocess.run(['git', 'clone', self.repo], check=True)
+                      print(f"Successfully cloned {self.repo}")
+                  
+                  except Exception as e:
+                      print(f"An error occurred while cloning the repository: {e}")
+                      print(f"An unexpected error occurred: {e}")
+
+
+              def upload_files_to_s3(self, local_directory, prefix, bucket_name):
+                  # Initialize the S3 client
+                  s3_client = boto3.client('s3')
+
+                  # Walk through the local directory
+                  for root, dirs, files in os.walk(local_directory):
+                      for filename in files:
+                          # Construct the full local path
+                          local_path = os.path.join(root, filename)
+                          
+                          # Construct the S3 path
+                          #relative_path = os.path.relpath(local_path, local_directory)
+                          #s3_path = os.path.join(relative_path).replace("\\", "/")
+                          print(local_path)
+                          print(f"{prefix}/{filename}")
+                          # Upload the file
+                          try:
+                              print(f"Uploading {local_path} to {bucket_name}/{prefix}")
+                              s3_client.upload_file(local_path, bucket_name, f"{prefix}/{filename}")
+                          except Exception as e:
+                              print(f"Error uploading {local_path}: {e}")
+
+              def global_s3_handles(self):
+                  session = boto3.Session()
+                  sts_client = boto3.client('sts')
+                  try:
+                      assumed_role_object = sts_client.assume_role(
+                          RoleArn = self.role_arn,
+                          RoleSessionName = "AssumeRoleSession1"
+                      )
+                      credentials = assumed_role_object['Credentials']
+                      self.s3_resource_g = boto3.resource(
+                          's3',
+                          aws_access_key_id = credentials['AccessKeyId'],
+                          aws_secret_access_key = credentials['SecretAccessKey'],
+                          aws_session_token = credentials['SessionToken'],
+                      )
+                      self.s3_client_g = boto3.client(
+                          's3',
+                          aws_access_key_id = credentials['AccessKeyId'],
+                          aws_secret_access_key = credentials['SecretAccessKey'],
+                          aws_session_token = credentials['SessionToken'],
+                      )
+                  except Exception as e:
+                      self.logger.error(f"Error assuming role: {e}")
+
+
+              def local_s3_handles(self):
+                  self.s3_resource = boto3.resource(
+                      's3'
                   )
-                  return True
-              except Exception as e:
-                  print(f"Error writing string to S3: {e}")
-                  return False
-          
-          def get_object(bucket, key):
-              try:
-                  obj = s3_resource_g.Object(bucket, key)
-                  response = obj.get()
-                  content = response['Body'].read().decode('utf-8')
-                  return content
-              except Exception as e:
-                  print(f"Error getting object from S3: {e}")
-          
-          def upload_to_aws(bucket, key):
-              filename = key.split("/")[-1]
-              tmp_file_path = f"/tmp/{filename}"
-              try:
-                  s3_client.upload_file(tmp_file_path, bucket, key)
-                  print("Upload Successful")
-                  return True
-              except FileNotFoundError:
-                  print("The file was not found")
-                  return False
+                  self.s3_client = boto3.client(
+                      's3'
+                  )
 
-          def download_file(bucket, key):  
-              s3_object = s3_resource_g.Object(bucket, key)
-              filename = key.split("/")[-1]
-              tmp_file_path = f"/tmp/{filename}"
-              try:
-                  logger.info("Downloading file to /tmp...")
-                  s3_object.download_file(tmp_file_path)
-                  logger.info("Download complete.")
-              except Exception as e:
-                  exception_type, exception_value, exception_traceback = sys.exc_info()
-                  traceback_string = traceback.format_exception(exception_type, exception_value, exception_traceback)
-                  err_msg = json.dumps({
-                      "errorType": exception_type.__name__,
-                      "errorMessage": str(exception_value),
-                      "stackTrace": traceback_string
-                  })
-                  logger.error(err_msg)
-        
-          def authorized(bucket):
-              try:
-                  obj = s3_resource_g.Object(bucket, f"eecustomers/{aws_account_id}")
-                  config = obj.get()['Body'].read().decode('utf-8')
-                  return True, config
-              except:
-                  print("Not authorised")
-                  config = ""
-                  return False, config
+
+              def to_local(self, string_data, file_name):
+                  try:
+                      self.s3_client.put_object(
+                          Body = string_data.encode('utf-8'),
+                          Bucket = self.target_bucket,
+                          Key = file_name
+                      )
+                      return True
+                  except Exception as e:
+                      self.logger.error(f"Error writing string to local bucket: {e}")
+                      return False
+               
+              def get_config_from_clone():    
+                  with open("/tmp/roar/config/review_config.json","r",) as f:
+                  return json.load(f)
+
+              def from_global(self, key):
+                  try:
+                      obj = self.s3_resource_g.Object(self.source_bucket, key)
+                      response = obj.get()
+                      content = response['Body'].read().decode('utf-8')
+                      return content
+                  except Exception as e:
+                      self.logger.error(f"Error getting object from S3: {e}")
+
+
+              def filename_from_key(key):
+                  filename = key.split("/")[-1]
+                  return filename
+
+
+              def lambda_tmp():
+                  return "/tmp"
+
+
+              def upload_local(self, key ):    
+                  filename = self.filename_from_key(key)
+                  tmp_file_path = f"{self.lambda_tmp()}/{filename}"
+                  try:
+                      self.s3_client.upload_file(tmp_file_path, self.target_bucket, key)
+                      self.logger.info("Upload Successful")
+                      return True
+                  except FileNotFoundError:
+                      self.logger.error("File  not found")
+                      return False
+
+
+              def download_global(self, key):  
+                  s3_object = self.s3_resource_g.Object(self.source_bucket, key)
+                  filename = self.filename_from_key(key)
+                  tmp_file_path = f"{self.lambda_tmp()}/{filename}"
+                  try:
+                      self.logger.info("Downloading file ...")
+                      s3_object.download_file(tmp_file_path)
+                      self.logger.info("Download complete.")
+                  except Exception as e:
+                      exception_type, exception_value, exception_traceback = sys.exc_info()
+                      traceback_string = traceback.format_exception(exception_type, exception_value, exception_traceback)
+                      err_msg = json.dumps({
+                          "errorType": exception_type.__name__,
+                          "errorMessage": str(exception_value),
+                          "stackTrace": traceback_string
+                      })
+                      self.logger.error(err_msg)
+
+              def authorized(self):
+                  try:
+                      obj = self.s3_resource_g.Object(self.source_bucket, f"{self.customer_prefix}{self.account_id}")
+                      self.config = obj.get()['Body'].read().decode('utf-8')
+                      return True
+                  except:
+                      self.logger.error("Not authorised")
+                      self.config = ""
+                      return False
+
+              def get_accountid():
+                  sts = boto3.client("sts")
+                  identity = sts.get_caller_identity()
+                  account_id = identity["Account"]
+                  return account_id
+              
+               def no_authorize_and_copy(self):
+                  try:
+                      clone_repo(github_repo_url, "/tmp"")
+                      bucket_name = self.target_bucket
+                      local_directory = "/tmp/roar/config"
+                      prefix ="config"
+                      upload_files_to_s3(local_directory, prefix, bucket_name)
+                      local_directory = "/tmp/roar/layer"
+                      prefix ="layer"
+                      upload_files_to_s3(local_directory, prefix, bucket_name)
+                      local_directory = "/tmp/roar/templates"
+                      prefix ="templates"
+                      upload_files_to_s3(local_directory, prefix, bucket_name)
+                      response = self.s3_client_g.list_objects_v2(Bucket=self.source_bucket, Prefix=self.templates_prefix)
+                  except:
+                      self.logger.error(traceback.format_exc())
+                      return False
+                      #cfnresponse.send(event, context, cfnresponse.FAILED, {})
+                      #raise   
+                  try:
+                      #extract SQL and write to destination bucket
+                      config_json = get_config_from_clone()
+                      sections = []
+                      for section in config_json["Sections"]:
+                          sections.append(section)
+                      for section in sections:
+                          sql_script = config_json["Sections"][section]["SQL"]
+                          self.to_local(sql_script, f"{self.script_prefix}{section}.sql")                           
+                  except:
+                      self.logger.error(traceback.format_exc())
+                      return False
+                      #cfnresponse.send(event, context, cfnresponse.FAILED, {})
+                      #raise
+                  return True
+
+
+              def authorize_and_copy(self):
+                  try:
+                      response = self.s3_client_g.list_objects_v2(Bucket=self.source_bucket, Prefix=self.templates_prefix)
+                      for obj in response.get('Contents', []):
+                          copy_source = self.from_global(obj['Key'])
+                          response = self.to_local(copy_source, obj['Key'])
+                  except:
+                      self.logger.error(traceback.format_exc())
+                      return False
+                      #cfnresponse.send(event, context, cfnresponse.FAILED, {})
+                      #raise                                           
+                  try:
+                      response = self.s3_client_g.list_objects_v2(Bucket=self.source_bucket, Prefix=self.config_prefix)
+                      for obj in response.get('Contents', []):
+                          copy_source = self.from_global(obj['Key'])
+                          response = self.to_localcopy_source, (obj['Key'])
+                  except:
+                      self.logger.error(traceback.format_exc())
+                      return False
+                      #cfnresponse.send(event, context, cfnresponse.FAILED, {})
+                      #raise
+                  try:
+                      #extract SQL and write to destination bucket
+                      config_json = json.loads(self.config)
+                      sections = []
+                      for section in config_json["Sections"]:
+                          sections.append(section)
+                      for section in sections:
+                          sql_script = config_json["Sections"][section]["SQL"]
+                          self.to_local(sql_script, f"{self.script_prefix}{section}.sql")                           
+                  except:
+                      self.logger.error(traceback.format_exc())
+                      return False
+                      #cfnresponse.send(event, context, cfnresponse.FAILED, {})
+                      #raise
+                  try:
+                      response = s3_client_g.list_objects_v2(Bucket=self.source_bucket, Prefix=self.layer_prefix)
+                      for obj in response.get('Contents', []):
+                          self.logger.debug(self.source_bucket)
+                          self.logger.debug(obj['Key'])
+                          if obj['Key'] != self.layer_prefix:
+                              self.download_global(obj['Key'])
+                              self.upload_local(obj['Key'])
+                  except:
+                      self.logger.error(traceback.format_exc())
+                      return False
+                      #cfnresponse.send(event, context, cfnresponse.FAILED, {})
+                      #raise 
+                  return True
+
+              # delete all objects under prefix in s3
+              def delete_prefix(self, prefix):
+                  try:
+                      response = self.s3_client.list_objects_v2(Bucket=self.target_bucket, Prefix=prefix)
+                      if 'Contents' in response:
+                          for obj in response['Contents']:
+                              self.s3_client.delete_object(Bucket=self.target_bucket, Key=obj['Key'])
+                              self.logger.info(f"Deleted object: {obj['Key']}")
+                  except Exception as e:
+                      self.logger.error(f"Error deleting objects: {e}")
+
 
           @logger.inject_lambda_context 
           def lambda_handler(event, context):
-              print(event)
-              print(context)
-              
+              '''Handle Lambda event from AWS'''
+              # Setup alarm for remaining runtime minus a second
+              signal.alarm((context.get_remaining_time_in_millis() / 1000) - 1)
+
+              logger.debug(event)
+              logger.debug(context)
+              role_arn = os.environ['ROLE_ARN']
               source_bucket = os.environ['SOURCE_BUCKET']
               destination_bucket = os.environ['DESTINATION_BUCKET']
               config_prefix = os.environ['CONFIG_PREFIX']
               script_prefix = os.environ['SCRIPT_PREFIX']
               layer_prefix = os.environ['LAYER_PREFIX']
               templates_prefix = os.environ['TEMPLATES_PREFIX'] 
-              # check if authorized
 
-              status, config = authorized(source_bucket)
+              acp = AuthorizeAndCopy(role_arn=role_arn,
+                                    source_bucket=source_bucket,
+                                    destination_bucket=destination_bucket,
+                                    config_prefix=config_prefix,
+                                    script_prefix=script_prefix,
+                                    layer_prefix=layer_prefix,
+                                    templates_prefix=templates_prefix,
+                                    logger=logger)
 
-              if status == False:
-                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
-                  logger.error("Not Authorised")
-                  raise
+              response = {}
+              try:
+                  logger.info('REQUEST RECEIVED:\n %s', event)
+                  logger.info('REQUEST RECEIVED:\n %s', context)
+                  if event['RequestType'] == 'Create':
+                      logger.info('CREATE!')
+                      #status = acp.autorize_and_copy() 
+                      status = acp.no_autorize_and_copy() 
+                      responseData = {}
+                      if status:
+                          responseData['Data'] = f"Resource creation successful!"
+                          cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, "CustomResourcePhysicalID")
+                      else:
+                          responseData['Data'] = f"Account not authorized for deployment"
+                          cfnresponse.send(event, context, cfnresponse.FAILED, responseData, "CustomResourcePhysicalID")
+                          logger.error("Not authorised")
 
-              destination_bucket = os.environ['DESTINATION_BUCKET']
-              config_prefix = os.environ['CONFIG_PREFIX']
-              script_prefix = os.environ['SCRIPT_PREFIX']
-              templates_prefix = os.environ['TEMPLATES_PREFIX']
-              write_string_to_s3(config, destination_bucket, f"{config_prefix}review_config.json")
+                  elif event['RequestType'] == 'Update':
+                  #    logger.info('UPDATE!')
+                  #    acp.delete_prefix(acp.templates_prefix)
+                  #    acp.delete_prefix(acp.config_prefix)
+                  #    acp.delete_prefix(acp.script_prefix)
+                  #
+                  #    status = acp.autorize_and_copy() 
+                  #    responseData = {}
+                  #    if status:
+                  #        responseData['Data'] = f"Resource update successful!"
+                  #        cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, "CustomResourcePhysicalID")
+                  #    else:
+                  #        responseData['Data'] = f"Account not authorized for deployment"
+                  #        cfnresponse.send(event, context, cfnresponse.FAILED, responseData, "CustomResourcePhysicalID")
+                  #        logger.error("Not authorised")
 
-              response ={}
-              if event['RequestType'] != 'Delete':
-                  try:
-                      response = s3_client_g.list_objects_v2(Bucket=source_bucket, Prefix=templates_prefix)
-                      for obj in response.get('Contents', []):
-                          copy_source = get_object( source_bucket, obj['Key'])
-                          response = write_string_to_s3(copy_source, destination_bucket, obj['Key'])
-                  except:
-                      print(traceback.format_exc())
-                      cfnresponse.send(event, context, cfnresponse.FAILED, {})
-                      raise                                           
-                  try:
-                      response = s3_client_g.list_objects_v2(Bucket=source_bucket, Prefix=config_prefix)
-                      for obj in response.get('Contents', []):
-                          copy_source = get_object( source_bucket, obj['Key'])
-                          response = write_string_to_s3(copy_source, destination_bucket, obj['Key'])
-                  except:
-                      print(traceback.format_exc())
-                      cfnresponse.send(event, context, cfnresponse.FAILED, {})
-                      raise
-                  try:
-                      #extract SQL and write to destination bucket
-                      config_json = json.loads(config)
-                      sections=[]
-                      for section in config_json["Sections"]:
-                          sections.append(section)
-                      for section in sections:
-                          sql_script = config_json["Sections"][section]["SQL"]
-                          write_string_to_s3(sql_script, destination_bucket, f"{script_prefix}{section}.sql")                           
-                  except:
-                      print(traceback.format_exc())
-                      cfnresponse.send(event, context, cfnresponse.FAILED, {})
-                      raise
-                  try:
-                      response = s3_client_g.list_objects_v2(Bucket=source_bucket, Prefix=layer_prefix)
-                      for obj in response.get('Contents', []):
-                          logger.info(source_bucket)
-                          logger.info(obj['Key'])
-                          if obj['Key'] != layer_prefix:
-                              download_file(source_bucket, obj['Key'])
-                              upload_to_aws(destination_bucket, obj['Key'])
-                  except:
-                      print(traceback.format_exc())
-                      cfnresponse.send(event, context, cfnresponse.FAILED, {})
-                      raise   
-              cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  elif event['RequestType'] == 'Delete':
+                      logger.info('DELETE!')            
+                      responseData = {}
+                      status = True
+                      if status:
+                          responseData['Data'] = f"Resource deletion successful!"
+                          cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, "CustomResourcePhysicalID")
+                      else:
+                          responseData['Data'] = f"Resource deletion failed"
+                          cfnresponse.send(event, context, cfnresponse.FAILED, responseData, "CustomResourcePhysicalID")
+                          logger.error("Deletion error")
+                  else:
+                      logger.info('FAILED!')
+                      responseData = {}
+                      responseData['Data'] = f"Unexpected event from cloudFormation"
+                      cfnresponse.send(event, context, cfnresponse.FAILED, responseData, "CustomResourcePhysicalID")
+                      logger.error(responseData['Data'])
+              except: #pylint: disable=W0702
+                  logger.info('FAILED!')
+                  responseData = {}
+                  responseData['Data'] = f"Exception during processing"
+                  cfnresponse.send(event, context, cfnresponse.FAILED, responseData, "CustomResourcePhysicalID")
+
+          def timeout_handler(_signal, _frame):
+              '''Handle SIGALRM'''
+              raise Exception('Time exceeded')
+
+          signal.signal(signal.SIGALRM, timeout_handler)
 
   AuthorizeFunction:
     Type: Custom::AuthorizeFunction
@@ -434,9 +671,13 @@ Resources:
     DependsOn: 
       - S3BucketLocal
       - LambdaAuthorizeRole
-      - LambdaAuthorizeFunction
       - SNSTopicPolicy
     Properties:
+      Tags:
+        - Key: Application
+          Value: ROAR
+        - Key: Owner
+          Value: TeamROAR
       ServiceToken: !Sub 
       - arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaAuthorize}
       - {LambdaAuthorize: !Ref LambdaAuthorizeFunction}
@@ -458,6 +699,11 @@ Resources:
         ScriptPath: !FindInMap [VariableMap, ScriptPath, Value]
         ResultPath: !FindInMap [VariableMap, ResultPath, Value]
         ErrorPath: !FindInMap [VariableMap, ErrorPath, Value]
+      Tags:
+        - Key: Application
+          Value: ROAR
+        - Key: Owner
+          Value: TeamROAR
 
   NestedStackLambdasL1:
     Type: AWS::CloudFormation::Stack
@@ -477,7 +723,11 @@ Resources:
         ManifestPath: !FindInMap [VariableMap, ManifestPath, Value]
         ConfigPath: !FindInMap [VariableMap, ConfigPath, Value]
         HTMLPath: !FindInMap [VariableMap, HTMLPath, Value]
-  
+      Tags:
+        - Key: Application
+          Value: ROAR
+        - Key: Owner
+          Value: TeamROAR
 
   NestedStackSFLayer2:
     Type: AWS::CloudFormation::Stack
@@ -496,7 +746,11 @@ Resources:
         ResultPath: !FindInMap [VariableMap, ResultPath, Value]
         ErrorPath: !FindInMap [VariableMap, ErrorPath, Value]
         LambdaWorkflowName: !GetAtt NestedStackLambdasL1.Outputs.LambdaWorkflowFunctionName
-
+      Tags:
+        - Key: Application
+          Value: ROAR
+        - Key: Owner
+          Value: TeamROAR
 
   NestedStackSFLayer3:
     Type: AWS::CloudFormation::Stack
@@ -518,6 +772,12 @@ Resources:
         LambdaProcessResultsName: !GetAtt NestedStackLambdasL1.Outputs.LambdaProcessResultsFunctionName
         LambdaCreateHTMLName: !GetAtt NestedStackLambdasL1.Outputs.LambdaCreateHTMLFunctionName
         SNSTopic: !GetAtt ErrorSNSTopic.TopicArn
+      Tags:
+        - Key: Application
+          Value: ROAR
+        - Key: Owner
+          Value: TeamROAR      
+    
 
   NestedStackLambdasL2: 
     Type: AWS::CloudFormation::Stack
@@ -540,7 +800,11 @@ Resources:
         WorkflowKey: !Ref WorkflowKey
         CronExpression: !Ref CronExpression
         CronStatus: !Ref CronStatus
-
+      Tags:
+        - Key: Application
+          Value: ROAR
+        - Key: Owner
+          Value: TeamROAR
 
   CFLambdaFunction:
     Type: Custom::CFLambdaFunction
@@ -550,6 +814,20 @@ Resources:
       - NestedStackSFLayer1
       - NestedStackLambdasL1
     Properties:
+      Tags:
+        - Key: Application
+          Value: ROAR
+        - Key: Owner
+          Value: TeamROAR
       ServiceToken: !Sub 
       - arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaSF}
       - {LambdaSF: !GetAtt NestedStackLambdasL2.Outputs.CFLambdaFunctionName}
+
+Outputs:
+    LambdaInvokeStepFunctionName:
+      Description: The FunctionName of the lambda that invokes ssf
+      Value: !Ref NestedStackSFLayer1.Outputs.LambdaInvokeStepFunction
+
+    ScheduledRuleName:
+      Description: The Name of the scheduled rule
+      Value: !Ref NestedStackSFLayer1.Outputs.ScheduledRuleName
