@@ -580,9 +580,23 @@ Resources:
           import pandasql as ps
           from aws_lambda_powertools import Logger
           from aws_lambda_powertools.utilities.typing import LambdaContext
+          from datetime import datetime
 
           s3 = boto3.client('s3')
           logger = Logger()
+
+          def timestamp_to_readable(timestamp):
+              # Convert the string timestamp to an integer
+              timestamp_int = int(timestamp)
+              
+              # Convert the integer timestamp to a datetime object
+              dt_object = datetime.fromtimestamp(timestamp_int)
+              
+              # Format the datetime object as a human-readable string
+              readable_date = dt_object.strftime("%Y-%m-%d %H:%M:%S")
+              
+              return readable_date
+
           @logger.inject_lambda_context
           def lambda_handler(event, context):
               logger.info(event)
@@ -597,6 +611,8 @@ Resources:
               wait = int(event["wait"])
               wait_time = int(event["wait_time"])
               timestamp = str(int(event["timestamp"]))
+
+              display_timestamp = timestamp_to_readable(timestamp)
 
               wait -= 1
 
@@ -716,9 +732,10 @@ Resources:
                   print("tabtext" + str(tabcount))
                   html_data = html_data.replace("tabtext_" + strTabCount, htmloutput)
                   print('f ' + filename)
-                  html_data = html_data.replace("Tab_"+ strTabCount, filename)
-                  
-                  
+                  html_data = html_data.replace("Tab_"+ strTabCount, (filename.split("/")[-1]).split(".")[0])
+
+                  html_data = html_data.replace("REPLACE_DATE_TIME",display_timestamp)
+                                   
                   tabcount=tabcount + 1
                   
                 # s3.put_object(Bucket='lavatest2', Key='output.xlsx')
