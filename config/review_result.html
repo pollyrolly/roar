@@ -1,0 +1,436 @@
+<html>
+<head>
+ <meta charset="utf-8"/>
+ <style>
+ 
+ body{
+  margin: 0;
+}
+
+#header{
+ 
+ background-color: #334a94;
+ height: 70px;
+ color: #FFFFFF;
+ text-align: left;
+ padding-left: 20px;
+ padding-top: 20px;
+ font-family: "Arial";
+}
+ 
+#nav{
+ background-color: #334a94;
+ height: 450px;
+ width: 250px;
+ float: left;
+ padding: 5px;
+}
+ 
+#section{
+ width: 500px;
+ float: left;
+ padding: 10px;
+}
+
+h2{
+  font-family: "Tahoma";
+}
+
+p{
+  font-family: "Palatino Linotype";
+}
+ 
+#footer{
+ background-color: #334a94;
+ color: #FFFFFF;
+ clear: both;
+ text-align: center;
+ padding: 20px;
+}
+
+
+.tab ul {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    background-color: #334a94;
+}
+
+li  {
+  font-family: Calibri;
+  font-size: 14pt;
+  font-style:none;
+  display: block;
+  color: #FFFFFF;
+  padding: 8px 0 8px 16px;
+  text-decoration: none;
+}
+
+li:active  {
+    background-color: #4CAF50;
+    color: #FFFFFF;
+	
+}
+
+li:hover {
+    background-color: #786ED4;
+    color: #000000;
+}
+
+.AWS-logo {
+ 
+  top: 1px;
+  height: 40px;
+  background: #5555557a;
+  
+}
+
+.AWS {
+  position: absolute;
+  width: 40px;
+  height: 20px;
+  top: 15px;
+  left: 5px;
+  
+}
+
+.AWS-logo h2 {
+	position: absolute;
+	top: 1px;
+	left: 40px;
+	
+}
+
+
+
+
+.smile {
+  position: absolute;
+  width: 40px;
+  height: 8px;
+  top: 30px;
+  left: 15px;;
+}
+
+.tab {
+  float: left;
+  border: 1px solid #ccc;
+  background-color: #f1f1f1;
+  width: 40%;
+  height: 900px;
+  position: relative;
+  overflow: auto;
+}
+
+/* Style the buttons inside the tab */
+.tab button {
+  display: block;
+  background-color: inherit;
+  color: black;
+  padding: 22px 16px;
+  width: 100%;
+  border: none;
+  outline: none;
+  text-align: left;
+  cursor: pointer;
+  transition: 0.3s;
+  font-size: 17px;
+}
+
+/* Change background color of buttons on hover */
+.tab button:hover {
+  background-color: #ddd;
+}
+
+/* Create an active/current "tab button" class */
+.tab button.active {
+  background-color: #ccc;
+}
+
+/* Style the tab content */
+.tabcontent {
+  float: left;
+  padding: 0px 12px;
+  border: 1px solid #ccc;
+  width: 75%;
+  border-left: none;
+  height: 450px;
+  overflow: auto;
+}
+
+ </style>
+ 
+<script
+src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.js">
+</script>
+
+</head>
+<body>
+ 
+<div id="header">
+ <img class="AWS" src="https://a0.awsstatic.com/libra-css/images/logos/aws_smile-header-desktop-en-white_59x35@2x.png"  alt=""/> 
+ <h2>Redshift Cluster Review Report</h2>
+</div>
+ 
+<div id="nav" class="tab">
+  <ul >
+     <li class="tablinks" id="#tab_0" onclick="openTab(event, 'tab_0')">ClusterDetails</a></li>
+     <li class="tablinks" onclick="openTab(event, 'tab_1')">Tab_01</a></li>
+     <li class="tablinks" onclick="openTab(event, 'tab_2')">Tab_02</a></li>
+     <li class="tablinks" onclick="openTab(event, 'tab_3')">Tab_03</a></li>
+	 <li class="tablinks" onclick="openTab(event, 'tab_4')">Tab_04</a></li>
+     <li class="tablinks" onclick="openTab(event, 'tab_5')">Tab_05</a></li>
+	 <li class="tablinks" onclick="openTab(event, 'tab_6')">Tab_06</a></li>
+     <li class="tablinks" onclick="openTab(event, 'tab_7')">Tab_07</a></li>
+	 <li class="tablinks" onclick="openTab(event, 'tab_8')">Tab_08</a></li>
+     <li class="tablinks" onclick="openTab(event, 'tab_9')">Tab_09</a></li>
+	 <li class="tablinks" onclick="openTab(event, 'tab_10')">Tab_10</a></li>
+     <li class="tablinks" onclick="openTab(event, 'tab_11')">Tab_11</a></li>
+	 <li class="tablinks" onclick="openTab(event, 'tab_12')">Tab_12</a></li>
+     <li class="tablinks" onclick="openTab(event, 'tab_13')">Tab_13</a></li>
+	 <li class="tablinks" onclick="openTab(event, 'tab_14')">Tab_14</a></li>
+     <li class="tablinks" onclick="openTab(event, 'tab_15')">Tab_15</a></li>
+	 <li class="tablinks" onclick="openTab(event, 'tab_16')">Tab_16</a></li>
+     <li class="tablinks" onclick="openTab(event, 'tab_17')">Tab_17</a></li>
+	 <li class="tablinks" onclick="openTab(event, 'tab_18')">Tab_18</a></li>
+     
+	 
+  </ul>
+</div>
+ 
+<div id="tab_0" class="tabcontent" data-tab-info>
+  <table border="1" class="dataframe">
+
+    
+      <th>AccountId</th>
+      <th>ClusterId</th>
+      <th>ClusterName</th>
+      <th>InstanceType</th>
+      <th>NumberDataNodes</th>
+      <th>ClusterVersion</th>
+      
+      <tr>
+      <td>47939527907</td>
+      <td>35718913</td>
+      <td>reignitepoc</td>
+      <td>ra3.xlplus</td>
+      <td>2</td>
+      <td>p180</td>
+      </tr>
+    </table>		
+	<br>
+	<br>
+	
+	
+	<table>
+	<tr>
+	<td><canvas id="barChart" style="width:60%; "></canvas></td>	
+	</tr>
+	<tr>
+	 <td><canvas id="lineChart" style="width:100%;"></canvas></td>
+	</tr>
+	<tr>	
+	<td><canvas id="sigChart" style="width:100%;"></canvas></td>
+	</tr>
+	</table>
+	<script>
+	var xValues = ["Table Alerts", "Table Info", "AlterTable Recommendations", "Spectrun Performance"];
+	var yValues = [27, 15, 3, 3] ;
+	var barColors = ["blue", "blue","blue","blue"];
+
+	new Chart("barChart", {
+	  type: "bar",
+	  data: {
+		labels: xValues,
+		datasets: [{
+		  backgroundColor: barColors,
+		  data: yValues,
+		  barThickness: 30
+		}]
+	  },
+	  options: {
+		legend: {display: false},
+		
+		title: {
+		  display: true,
+		  text: "Top Categories with Signals"
+		}
+	  }
+	});
+	
+	const xlineValues = ['4-Feb','11-Feb','18-Feb','26-Feb','8-Mar','16-Mar','5-Apr'];
+	
+	
+
+	new Chart("lineChart", {
+	  type: "line",
+	  data: {
+		labels: xlineValues,
+		datasets: [{ 
+		  data: [16, 13,13, 9, 7,6,3],
+		  borderColor: "red",
+		  label: "Alter Table Recommendations",
+		  fill: false
+		}, { 
+		  data: [8,9,11,8, 6,6,14],
+		  borderColor: "green",
+		  label: "Copy Performance",
+		  fill: false
+		}, { 
+		  data: [7,5,5,3,2,2,1],
+		  borderColor: "blue",
+		  label: "Queue Health",
+		  fill: false
+		},		
+		{ 
+		  data: [15,13,13,10,8,5,3],
+		  borderColor: "yellow",
+		  label: "Spectrum Performance",
+		  fill: false
+		},
+		{ 
+		  data: [17,15,15,14,14,12,27],
+		  borderColor: "grey",
+		  label: "Table Alerts",
+		  fill: false
+		},
+		{ 
+		  data: [21,18,21,24,16,15,15],
+		  borderColor: "purple",
+		  label: "Table Info",
+		  fill: false
+		}
+		]
+	  },
+	  options: {
+	  
+		legend: {
+			display: true,
+			position: "right"
+			},
+		title: {
+		  display: true,
+		  text: "Category Trends over 3 months"
+		}
+	  }
+	});
+	
+	
+	const xSigValues = ['4-Feb','11-Feb','18-Feb','26-Feb','8-Mar','16-Mar','5-Apr'];
+	
+	
+
+	new Chart("sigChart", {
+	  type: "line",
+	  data: {
+		labels: xSigValues,
+		datasets: [{ 
+		  data: [8,9,11,8, 6,6,14],
+		  borderColor: "blue",
+		  label: "Copy Performance",
+		  fill: false
+		},
+		{ 
+		  data: [17,15,15,14,14,12,27],
+		  borderColor: "orange",
+		  label: "Table Alerts",
+		  fill: false
+		}
+		]
+	  },
+	  options: {
+		legend: {
+			display: true,
+			position: "right"
+			},
+		title: {
+		  display: true,
+		  text: "Categories with increased Signals"
+		}
+	  }
+	});
+	</script>
+	
+
+</div>
+
+<div id="tab_1" class="tabcontent" data-tab-info>
+  <p>tabtext_01</p>
+</div>
+<div id="tab_2" class="tabcontent" data-tab-info>
+  <p>tabtext_02</p>
+</div>
+<div id="tab_3" class="tabcontent" data-tab-info>
+  <p>tabtext_03</p>
+</div>
+<div id="tab_4" class="tabcontent" data-tab-info>
+  <p>tabtext_04</p>
+</div>
+<div id="tab_5" class="tabcontent" data-tab-info  >
+  <p>tabtext_05</p>
+</div>
+<div id="tab_6" class="tabcontent" data-tab-info>
+  <p>tabtext_06</p>
+</div>
+<div id="tab_7" class="tabcontent" data-tab-info>
+  <p>tabtext_07</p>
+</div>
+<div id="tab_8" class="tabcontent" data-tab-info>
+  <p>tabtext_08</p>
+</div>
+<div id="tab_9" class="tabcontent" data-tab-info>
+  <p>tabtext_09</p>
+</div>
+<div id="tab_10" class="tabcontent" data-tab-info>
+  <p>tabtext_10</p>
+</div>
+<div id="tab_11" class="tabcontent" data-tab-info>
+  <p>tabtext_11</p>
+</div>
+<div id="tab_12" class="tabcontent" data-tab-info>
+  <p>tabtext_12</p>
+</div>
+<div id="tab_13" class="tabcontent" data-tab-info>
+  <p>tabtext_13</p>
+</div>
+<div id="tab_14" class="tabcontent" data-tab-info>
+  <p>tabtext_14</p>
+</div>
+<div id="tab_15" class="tabcontent" data-tab-info>
+  <p>tabtext_15</p>
+</div>
+<div id="tab_16" class="tabcontent" data-tab-info>
+  <p>tabtext_16</p>
+</div>
+<div id="tab_17" class="tabcontent" data-tab-info>
+  <p>tabtext_17</p>
+</div>
+<div id="tab_18" class="tabcontent" data-tab-info>
+  <p>tabtext_18</p>
+</div>
+<script>
+function openTab(evt, tabid) {
+  // Declare all variables
+  var i, tabcontent, tablinks;
+
+  // Get all elements with class="tabcontent" and hide them
+  tabcontent = document.getElementsByClassName("tabcontent");
+  for (i = 0; i < tabcontent.length; i++) {
+    tabcontent[i].style.display = "none";
+  }
+
+  // Get all elements with class="tablinks" and remove the class "active"
+  tablinks = document.getElementsByClassName("tablinks");
+  for (i = 0; i < tablinks.length; i++) {
+    tablinks[i].className = tablinks[i].className.replace(" active", "");
+  }
+
+  // Show the current tab, and add an "active" class to the link that opened the tab
+  document.getElementById(tabid).style.display = "block";
+  evt.currentTarget.className += " active";
+} 
+document.getElementById("#tab_0").click();
+</script>
+</body>
+</html>

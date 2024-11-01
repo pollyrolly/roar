@@ -1,0 +1,555 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: "CloudFormation Template to deploy infrastructure for an automated Amazon Redshift review"
+Parameters:
+  RedshiftClusterEndpoint:
+    Description: The endpoint of the evaluated Redshift Cluster.
+    Type: String
+    Default: redshift-cluster-1.ccttwqjmja5e.us-west-2.redshift.amazonaws.com:5439/sample_data_dev
+  DbUsername:
+    Description: The username of the super user
+    Type: String
+    Default: awsuser
+  WorkflowKey:
+    Description: The key name of the workflow
+    Type: String
+    Default: all-serial
+    AllowedValues:
+      - all-serial
+      - serial-parallel
+      - all-parallel
+  EmailAddress:
+    Type: String
+    Description: an email address to subscribe to the SNS topic
+    Default: danakath@amazon.com
+  CronExpression:
+    Description: The cron expression for  starting the revie
+    Type: String
+    Default: "cron(0 20 ? * SUN *)"
+    #https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-cron-expressions.html
+  CronStatus:
+    Description: The cron expression for  starting the revie
+    Type: String
+    Default: "DISABLED"
+    AllowedValues:
+      - "ENABLED"
+      - "DISABLED"
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - 
+        Label:
+          default: "Redshift Cluster and User"
+        Parameters:
+          - RedshiftClusterEndpoint
+          - DbUsername
+      - 
+        Label:
+          default:  "Workflow Type"
+        Parameters:
+          - WorkflowKey
+      - 
+        Label:
+          default: "SNS Topic and Subscription"
+        Parameters:
+          - EmailAddress
+      - 
+        Label:
+          default: "Cron job parameters for review"
+        Parameters:
+          - CronExpression
+          - CronStatus
+
+Mappings:
+  VariableMap:
+    ManifestPath:
+      Value: manifest/
+    ScriptPath:
+      Value: scripts/
+    ResultPath:
+      Value: result/
+    HTMLPath:
+      Value: html/
+    ErrorPath:
+      Value: error/
+    ConfigPath:
+      Value: config/
+    TemplatesPath:
+      Value: templates/
+    LayerPath:
+      Value: layer/
+    S3BucketNameLocal:
+      Value: reignite24-local
+    S3BucketNameGlobal:
+      Value: reignite24-global-603836437137-us-east-1-oa2ff5we
+    ErrorTopicName:
+      Value: reignite24-error-topic
+    RoleArn:
+      Value: arn:aws:iam::603836437137:role/reignite24-read-global
+
+Resources:
+
+  ErrorSNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 
+        - '${TopicPrefix}-${AWS::AccountId}-${AWS::Region}'
+        - TopicPrefix: !FindInMap [VariableMap, ErrorTopicName, Value]
+  
+  EmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !GetAtt ErrorSNSTopic.TopicArn 
+      Endpoint: !Ref EmailAddress
+      Protocol: email
+
+  SNSTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: 
+              AWS: !Sub '${AWS::AccountId}'
+            Action: 'sns:Publish'
+            Resource: !Ref ErrorSNSTopic
+            Condition:
+              StringEquals: 
+                AWS:SourceOwner: !Sub '${AWS::AccountId}'
+      Topics:
+        - !GetAtt ErrorSNSTopic.TopicArn 
+
+  S3BucketLocal:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    Properties:
+      BucketName: !Sub 
+        - '${BucketNamePrefix}-${AWS::AccountId}-${AWS::Region}'
+        - BucketNamePrefix: !FindInMap [VariableMap, S3BucketNameLocal, Value]
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+
+  LambdaAuthorizeRole:
+    Type: AWS::IAM::Role
+    DeletionPolicy: Delete
+    Properties: 
+      Description: IAM Role for lambda to authorize deployment
+      RoleName: reignite24-authorize-lambda-role
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: assume-role-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: sts:AssumeRole
+                Resource: arn:aws:iam::603836437137:role/reignite24-read-global
+        - PolicyName: copy-outputAccessPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetBucketLocation
+                  - s3:ListBucket
+                  - s3:PutObject
+                Resource:
+                  - !Sub 
+                    - arn:${AWS::Partition}:s3:::${BnL}/*
+                    - BnL: !Ref S3BucketLocal
+                  - !Sub 
+                    - arn:${AWS::Partition}:s3:::${BnL}/${ScP}*
+                    - ScP: !FindInMap [VariableMap, ScriptPath, Value]
+                      BnL: !Ref S3BucketLocal
+                  - !Sub 
+                    - arn:${AWS::Partition}:s3:::${BnL}/${ScP}
+                    - ScP: !FindInMap [VariableMap, ScriptPath, Value]
+                      BnL: !Ref S3BucketLocal
+                  - !Sub 
+                    - arn:${AWS::Partition}:s3:::${BnL}/${ScP}*
+                    - ScP: !FindInMap [VariableMap, LayerPath, Value]
+                      BnL: !Ref S3BucketLocal
+                  - !Sub 
+                    - arn:${AWS::Partition}:s3:::${BnL}/${ScP}
+                    - ScP: !FindInMap [VariableMap, LayerPath, Value]
+                      BnL: !Ref S3BucketLocal
+                  - !Sub 
+                    - arn:${AWS::Partition}:s3:::${BnL}/${ScP}*
+                    - ScP: !FindInMap [VariableMap, TemplatesPath, Value]
+                      BnL: !Ref S3BucketLocal
+                  - !Sub 
+                    - arn:${AWS::Partition}:s3:::${BnL}/${ScP}
+                    - ScP: !FindInMap [VariableMap, TemplatesPath, Value]
+                      BnL: !Ref S3BucketLocal
+                  - !Sub 
+                    - arn:${AWS::Partition}:s3:::${BnL}/${ScP}*
+                    - ScP: !FindInMap [VariableMap, ConfigPath, Value]
+                      BnL: !Ref S3BucketLocal
+                  - !Sub 
+                    - arn:${AWS::Partition}:s3:::${BnL}/${ScP}
+                    - ScP: !FindInMap [VariableMap, ConfigPath, Value]
+                      BnL: !Ref S3BucketLocal
+                  - !Sub 
+                    - arn:${AWS::Partition}:s3:::${BnL}
+                    - BnL: !Ref S3BucketLocal
+        - PolicyName: LambdaCloudFormationPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:*
+                Resource:
+                  - !Sub arn:aws:s3:::cloudformation-custom-resource-response-${AWS::Region}
+                  - !Sub arn:aws:s3:::cloudformation-waitcondition-${AWS::Region}
+                  - !Sub arn:aws:s3:::cloudformation-custom-resource-response-${AWS::Region}/*
+                  - !Sub arn:aws:s3:::cloudformation-waitcondition-${AWS::Region}/*
+  
+  LambdaAuthorizeFunction:
+    Type: AWS::Lambda::Function
+    DeletionPolicy: Delete
+    Properties: 
+      Description: Lambda to authorize deployment
+      Handler: index.lambda_handler
+      Runtime: python3.12
+      Architectures:
+        - x86_64
+      Layers:
+        - !Sub arn:aws:lambda:${AWS::Region}:017000801446:layer:AWSLambdaPowertoolsPythonV2:71
+      Role: !GetAtt LambdaAuthorizeRole.Arn
+      Timeout: 900
+      MemorySize: 10000
+      Environment:
+        Variables: 
+          SOURCE_BUCKET: !Sub 
+            - '${S3BNGlobal}'
+            - S3BNGlobal: !FindInMap [VariableMap, S3BucketNameGlobal, Value] 
+          ROLE_ARN: !FindInMap [VariableMap, RoleArn, Value]
+          SCRIPT_PREFIX: !FindInMap [VariableMap, ScriptPath, Value] 
+          TEMPLATES_PREFIX: !FindInMap [VariableMap, TemplatesPath, Value] 
+          LAYER_PREFIX:  !FindInMap [VariableMap, LayerPath, Value] 
+          DESTINATION_BUCKET: !Ref S3BucketLocal 
+          CONFIG_PREFIX: !FindInMap [VariableMap, ConfigPath, Value] 
+          POWERTOOLS_LOG_LEVEL: INFO
+          POWERTOOLS_SERVICE_NAME: LambdaRolesL1
+      Code:
+        ZipFile: |
+          import boto3
+          import traceback
+          import json
+          import os
+          import cfnresponse
+          from aws_lambda_powertools import Logger
+          from aws_lambda_powertools.utilities.typing import LambdaContext
+          logger = Logger()       
+
+          role_arn = os.environ['ROLE_ARN']
+          client = boto3.client('sts')
+          aws_account_id = client.get_caller_identity()["Account"]
+          print(aws_account_id)
+          sts_client = boto3.client('sts')
+          assumed_role_object=sts_client.assume_role(
+              RoleArn=role_arn,
+              RoleSessionName="AssumeRoleSession1"
+          )
+          credentials=assumed_role_object['Credentials']
+          s3_resource_g = boto3.resource(
+              's3',
+              aws_access_key_id=credentials['AccessKeyId'],
+              aws_secret_access_key=credentials['SecretAccessKey'],
+              aws_session_token=credentials['SessionToken'],
+          )
+          s3_client_g = boto3.client(
+              's3',
+              aws_access_key_id=credentials['AccessKeyId'],
+              aws_secret_access_key=credentials['SecretAccessKey'],
+              aws_session_token=credentials['SessionToken'],
+          )
+          s3_resource = boto3.resource(
+              's3'
+          )
+          s3_client = boto3.client(
+              's3'
+          )
+
+          def write_string_to_s3(string_data, bucket_name, file_name):
+              try:
+                  s3_client.put_object(
+                      Body=string_data.encode('utf-8'),
+                      Bucket=bucket_name,
+                      Key=file_name
+                  )
+                  return True
+              except Exception as e:
+                  print(f"Error writing string to S3: {e}")
+                  return False
+          
+          def get_object(bucket, key):
+              try:
+                  obj = s3_resource_g.Object(bucket, key)
+                  response = obj.get()
+                  content = response['Body'].read().decode('utf-8')
+                  return content
+              except Exception as e:
+                  print(f"Error getting object from S3: {e}")
+          
+          def upload_to_aws(bucket, key):
+              filename = key.split("/")[-1]
+              tmp_file_path = f"/tmp/{filename}"
+              try:
+                  s3_client.upload_file(tmp_file_path, bucket, key)
+                  print("Upload Successful")
+                  return True
+              except FileNotFoundError:
+                  print("The file was not found")
+                  return False
+
+          def download_file(bucket, key):  
+              s3_object = s3_resource_g.Object(bucket, key)
+              filename = key.split("/")[-1]
+              tmp_file_path = f"/tmp/{filename}"
+              try:
+                  logger.info("Downloading file to /tmp...")
+                  s3_object.download_file(tmp_file_path)
+                  logger.info("Download complete.")
+              except Exception as e:
+                  exception_type, exception_value, exception_traceback = sys.exc_info()
+                  traceback_string = traceback.format_exception(exception_type, exception_value, exception_traceback)
+                  err_msg = json.dumps({
+                      "errorType": exception_type.__name__,
+                      "errorMessage": str(exception_value),
+                      "stackTrace": traceback_string
+                  })
+                  logger.error(err_msg)
+        
+          def authorized(bucket):
+              try:
+                  obj = s3_resource_g.Object(bucket, f"eecustomers/{aws_account_id}")
+                  config = obj.get()['Body'].read().decode('utf-8')
+                  return True, config
+              except:
+                  print("Not authorised")
+                  config = ""
+                  return False, config
+
+          @logger.inject_lambda_context 
+          def lambda_handler(event, context):
+              print(event)
+              print(context)
+              
+              source_bucket = os.environ['SOURCE_BUCKET']
+              destination_bucket = os.environ['DESTINATION_BUCKET']
+              config_prefix = os.environ['CONFIG_PREFIX']
+              script_prefix = os.environ['SCRIPT_PREFIX']
+              layer_prefix = os.environ['LAYER_PREFIX']
+              templates_prefix = os.environ['TEMPLATES_PREFIX'] 
+              # check if authorized
+
+              status, config = authorized(source_bucket)
+
+              if status == False:
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
+                  logger.error("Not Authorised")
+                  raise
+
+              destination_bucket = os.environ['DESTINATION_BUCKET']
+              config_prefix = os.environ['CONFIG_PREFIX']
+              script_prefix = os.environ['SCRIPT_PREFIX']
+              templates_prefix = os.environ['TEMPLATES_PREFIX']
+              write_string_to_s3(config, destination_bucket, f"{config_prefix}review_config.json")
+
+              response ={}
+              if event['RequestType'] != 'Delete':
+                  try:
+                      response = s3_client_g.list_objects_v2(Bucket=source_bucket, Prefix=templates_prefix)
+                      for obj in response.get('Contents', []):
+                          copy_source = get_object( source_bucket, obj['Key'])
+                          response = write_string_to_s3(copy_source, destination_bucket, obj['Key'])
+                  except:
+                      print(traceback.format_exc())
+                      cfnresponse.send(event, context, cfnresponse.FAILED, {})
+                      raise                                           
+                  try:
+                      response = s3_client_g.list_objects_v2(Bucket=source_bucket, Prefix=config_prefix)
+                      for obj in response.get('Contents', []):
+                          copy_source = get_object( source_bucket, obj['Key'])
+                          response = write_string_to_s3(copy_source, destination_bucket, obj['Key'])
+                  except:
+                      print(traceback.format_exc())
+                      cfnresponse.send(event, context, cfnresponse.FAILED, {})
+                      raise
+                  try:
+                      #extract SQL and write to destination bucket
+                      config_json = json.loads(config)
+                      sections=[]
+                      for section in config_json["Sections"]:
+                          sections.append(section)
+                      for section in sections:
+                          sql_script = config_json["Sections"][section]["SQL"]
+                          write_string_to_s3(sql_script, destination_bucket, f"{script_prefix}{section}.sql")                           
+                  except:
+                      print(traceback.format_exc())
+                      cfnresponse.send(event, context, cfnresponse.FAILED, {})
+                      raise
+                  try:
+                      response = s3_client_g.list_objects_v2(Bucket=source_bucket, Prefix=layer_prefix)
+                      for obj in response.get('Contents', []):
+                          logger.info(source_bucket)
+                          logger.info(obj['Key'])
+                          if obj['Key'] != layer_prefix:
+                              download_file(source_bucket, obj['Key'])
+                              upload_to_aws(destination_bucket, obj['Key'])
+                  except:
+                      print(traceback.format_exc())
+                      cfnresponse.send(event, context, cfnresponse.FAILED, {})
+                      raise   
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+
+  AuthorizeFunction:
+    Type: Custom::AuthorizeFunction
+    DeletionPolicy: Delete
+    DependsOn: 
+      - S3BucketLocal
+      - LambdaAuthorizeRole
+      - LambdaAuthorizeFunction
+      - SNSTopicPolicy
+    Properties:
+      ServiceToken: !Sub 
+      - arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaAuthorize}
+      - {LambdaAuthorize: !Ref LambdaAuthorizeFunction}
+
+  NestedStackSFLayer1:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - AuthorizeFunction
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TemplateURL: !Sub 
+        - 'https://s3.amazonaws.com/${S3BNLocal}/templates/SFL1Role.yaml'
+        - S3BNLocal: !Ref S3BucketLocal
+      Parameters:
+        RedshiftClusterEndpoint: !Ref RedshiftClusterEndpoint
+        DbUsername: !Ref DbUsername
+        S3BucketName: !Ref S3BucketLocal
+        ScriptPath: !FindInMap [VariableMap, ScriptPath, Value]
+        ResultPath: !FindInMap [VariableMap, ResultPath, Value]
+        ErrorPath: !FindInMap [VariableMap, ErrorPath, Value]
+
+  NestedStackLambdasL1:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - NestedStackSFLayer1
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TemplateURL: !Sub 
+        - 'https://s3.amazonaws.com/${S3BNLocal}/templates/LambdasRolesL1.yaml'
+        - S3BNLocal: !Ref S3BucketLocal
+      Parameters:
+        RedshiftClusterEndpoint: !Ref RedshiftClusterEndpoint
+        S3BucketName: !Ref S3BucketLocal
+        ResultPath: !FindInMap [VariableMap, ResultPath, Value]
+        ErrorPath: !FindInMap [VariableMap, ErrorPath, Value]
+        ManifestPath: !FindInMap [VariableMap, ManifestPath, Value]
+        ConfigPath: !FindInMap [VariableMap, ConfigPath, Value]
+        HTMLPath: !FindInMap [VariableMap, HTMLPath, Value]
+  
+
+  NestedStackSFLayer2:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - NestedStackLambdasL1
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TemplateURL:  !Sub 
+        - 'https://s3.amazonaws.com/${S3BNLocal}/templates/SFL2Role.yaml'
+        - S3BNLocal: !Ref S3BucketLocal
+      Parameters:
+        SFLayer1StateMachine: !GetAtt NestedStackSFLayer1.Outputs.SFLayer1
+        SFLayer1ErrorCStateMachine: !GetAtt NestedStackSFLayer1.Outputs.SFLayer1ErrorHandlingC
+        S3BucketName: !Ref S3BucketLocal
+        ResultPath: !FindInMap [VariableMap, ResultPath, Value]
+        ErrorPath: !FindInMap [VariableMap, ErrorPath, Value]
+        LambdaWorkflowName: !GetAtt NestedStackLambdasL1.Outputs.LambdaWorkflowFunctionName
+
+
+  NestedStackSFLayer3:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - NestedStackSFLayer2
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TemplateURL: !Sub 
+        - 'https://s3.amazonaws.com/${S3BNLocal}/templates/SFL3Role.yaml'
+        - S3BNLocal: !Ref S3BucketLocal      
+      Parameters:
+        StateMachineLayer2: !GetAtt NestedStackSFLayer2.Outputs.SFLayer2
+        S3BucketName: !Ref S3BucketLocal
+        ManifestPath: !FindInMap [VariableMap, ManifestPath, Value]
+        ResultPath: !FindInMap [VariableMap, ResultPath, Value]
+        ErrorPath: !FindInMap [VariableMap, ErrorPath, Value]
+        LambdaCreateOutputName: !GetAtt NestedStackLambdasL1.Outputs.LambdaCreateOutputFunctionName
+        LambdaProcessResultsName: !GetAtt NestedStackLambdasL1.Outputs.LambdaProcessResultsFunctionName
+        LambdaCreateHTMLName: !GetAtt NestedStackLambdasL1.Outputs.LambdaCreateHTMLFunctionName
+        SNSTopic: !GetAtt ErrorSNSTopic.TopicArn
+
+  NestedStackLambdasL2: 
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - NestedStackSFLayer3
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TemplateURL:  !Sub
+        - 'https://s3.amazonaws.com/${S3BNLocal}/templates/LambdasRolesL2.yaml'
+        - S3BNLocal: !Ref S3BucketLocal
+      Parameters:
+        StateMachineL3: !GetAtt NestedStackSFLayer3.Outputs.SFLayer3
+        StateMachineL3Html: !GetAtt NestedStackSFLayer3.Outputs.SFLayer3Html
+        S3BucketName: !Ref S3BucketLocal
+        ScriptPath: !FindInMap [VariableMap, ScriptPath, Value]
+        ResultPath: !FindInMap [VariableMap, ResultPath, Value]
+        ErrorPath: !FindInMap [VariableMap, ErrorPath, Value]
+        ConfigPath: !FindInMap [VariableMap, ConfigPath, Value]
+        WorkflowKey: !Ref WorkflowKey
+        CronExpression: !Ref CronExpression
+        CronStatus: !Ref CronStatus
+
+
+  CFLambdaFunction:
+    Type: Custom::CFLambdaFunction
+    DependsOn: 
+      - NestedStackSFLayer3
+      - NestedStackSFLayer2
+      - NestedStackSFLayer1
+      - NestedStackLambdasL1
+    Properties:
+      ServiceToken: !Sub 
+      - arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaSF}
+      - {LambdaSF: !GetAtt NestedStackLambdasL2.Outputs.CFLambdaFunctionName}

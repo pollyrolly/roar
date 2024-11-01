@@ -1,0 +1,403 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Nested Stack for Lambdas
+
+Parameters:
+  ScriptPath:
+    Description: Script Path
+    Type: String
+    Default: scripts/
+  ResultPath:
+    Description: Result Path
+    Type: String
+    Default: result/
+  ErrorPath:
+    Description: Error Path
+    Type: String
+    Default: error/
+  ConfigPath:
+    Description: Config Path
+    Type: String
+    Default: config/
+  S3BucketName:
+    Description: The S3 bucket name
+    Type: String
+    Default: reignite24-local-266726630905-us-east-1
+  StateMachineL3:
+    Type: String
+    Description: The state machine ARN
+    Default: arn:aws:states:us-east-1:266726630905:stateMachine:MyStateMachine-71tewtc75
+  StateMachineL3Html:
+    Type: String
+    Description: The state machine ARN
+    Default: arn:aws:states:us-east-1:266726630905:stateMachine:MyStateMachine-71tewtc75
+  WorkflowKey:
+    Description: The key name of the workflow
+    Type: String
+    Default: all-serial
+    AllowedValues:
+      - all-serial
+      - serial-parallel
+      - all-parallel
+  CronExpression:
+    Description: The cron expression for  starting the revie
+    Type: String
+    Default: "cron(0 20 ? * SUN *)"
+    #https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-cron-expressions.html
+  CronStatus:
+    Description: The cron expression for  starting the revie
+    Type: String
+    Default: "DISABLED"
+    AllowedValues:
+      - "ENABLED"
+      - "DISABLED"
+
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Input Parameters
+        Parameters:
+          - S3BucketName
+          - ScriptPath
+          - ResultPath
+          - ErrorPath
+          - ConfigPath
+          - StateMachineL3
+          - StateMachineL3Html
+          - WorkflowKey
+          - CronExpression
+          - CronStatus
+
+
+Resources:
+  LambdaInvokeStepFunctionRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      Description: IAM Role for lambda to execute the Step Function
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: sfl3-ScriptAccessPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetBucketLocation'
+                  - 's3:GetObject'
+                  - 's3:ListBucket'
+                Resource: 
+                  - !Sub 'arn:${AWS::Partition}:s3:::${S3BucketName}/*'
+                  - !Sub 'arn:${AWS::Partition}:s3:::${S3BucketName}/${ConfigPath}*'
+                  - !Sub 'arn:${AWS::Partition}:s3:::${S3BucketName}/${ConfigPath}'
+                  - !Sub 'arn:${AWS::Partition}:s3:::${S3BucketName}'
+        - PolicyName: sfl3-OutputAccessPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:PutObject'
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:s3:::${S3BucketName}/*'
+                  - !Sub 'arn:${AWS::Partition}:s3:::${S3BucketName}/${ErrorPath}*'
+                  - !Sub 'arn:${AWS::Partition}:s3:::${S3BucketName}/${ResultPath}*'
+                  - !Sub 'arn:${AWS::Partition}:s3:::${S3BucketName}/${ErrorPath}'
+                  - !Sub 'arn:${AWS::Partition}:s3:::${S3BucketName}/${ResultPath}'
+                  - !Sub 'arn:${AWS::Partition}:s3:::${S3BucketName}'
+        - PolicyName: LambdaInvokePolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - states:StartExecution
+                Resource:
+                  - !Ref StateMachineL3
+                  - !Ref StateMachineL3Html
+
+        - PolicyName: lam2rol-XRayPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                  - xray:GetSamplingRules
+                  - xray:GetSamplingTargets
+                Resource:
+                  - '*'
+
+  LambdaInvokeStepFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: Lambda to execute the step function
+      Handler: index.lambda_handler
+      Runtime: python3.10
+      Architectures:
+        - x86_64
+      Layers:
+        - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:017000801446:layer:AWSLambdaPowertoolsPythonV2:71'
+      Role: !GetAtt LambdaInvokeStepFunctionRole.Arn
+      Timeout: 600
+      Environment:
+        Variables: 
+          STATE_MACHINE: !Ref StateMachineL3
+          STATE_MACHINE_AGG: !Ref StateMachineL3Html
+          BUCKET_NAME: !Ref S3BucketName
+          SCRIPT_PATH: !Ref ScriptPath
+          RESULT_PATH: !Ref ResultPath
+          ERROR_PATH: !Ref ErrorPath
+          CONFIG_PATH: !Ref ConfigPath
+          WORKFLOW_KEY: !Ref WorkflowKey
+          POWERTOOLS_LOG_LEVEL: INFO
+          POWERTOOLS_SERVICE_NAME: LambdaRolesL2
+      Code:
+        ZipFile: |
+          import boto3
+          import traceback
+          import json
+          import os
+          from datetime import datetime
+          from aws_lambda_powertools import Logger
+          from aws_lambda_powertools.utilities.typing import LambdaContext
+
+          state_machine_arn = os.environ["STATE_MACHINE"]
+          state_machine_agg_arn = os.environ["STATE_MACHINE_AGG"]
+          bucket_name = os.environ["BUCKET_NAME"]
+          error_path = os.environ["ERROR_PATH"]
+          script_path = os.environ["SCRIPT_PATH"]
+          result_path = os.environ["RESULT_PATH"]
+          workflow_key = os.environ["WORKFLOW_KEY"]
+          config_path = os.environ["CONFIG_PATH"]
+
+          s3 = boto3.client( "s3" )
+          logger = Logger()
+
+          def read_json_from_s3(bucket_name, key):
+              try:
+                  response = s3.get_object(Bucket=bucket_name, Key=key)
+                  content = response['Body'].read().decode('utf-8')
+                  print(content)
+                  json_data = json.loads(content)
+                  return json_data
+              except Exception as e:
+                  print(f"Error reading JSON from S3: {e}")
+                  return None
+
+          def workflow_list(timestamp, lenid, segid, workflow, bucket_name):
+            QueryList={}
+            step_id =0
+
+            for step_time in workflow:
+                step = step_time.split(":")[0]
+                time = step_time.split(":")[1]
+                QueryList[step] =  {
+                    "ScriptName": f"{script_path}{step}.sql",
+                    "OutputLocation": f"{result_path}{timestamp}/{step}.json",
+                    "IDLocation": f"id/{timestamp}/{step}.json",
+                    "TimeThreshold": int(time),
+                    "ErrorLocation": f"{error_path}{timestamp}/{step}.json",
+                    "Status": "INITIAL",
+                    "Script": step,
+                    "Timestamp" : timestamp,
+                    "Step_ID" : (lenid, segid)
+                }
+                if step_id == 0:
+                    start_query = QueryList[step]
+                    step_id += 1
+            sf_input = {
+                "Query" : start_query,
+                "QueryList": QueryList,
+                "S3BucketName": bucket_name,
+                "Status" : "INITIAL"
+                }
+            return sf_input
+
+          @logger.inject_lambda_context
+          def lambda_handler(event, context):
+              #logger.info(event)
+              step_function_client = boto3.client('stepfunctions')
+              res = {}
+              try:
+                  timestamp = str(int(datetime.timestamp(datetime.now())))
+                  config = read_json_from_s3(bucket_name,f"{config_path}config.json")
+                  logger.info(config)
+                  logger.info(workflow_key)
+                  segments = config[workflow_key]
+                  logger.info(segments)
+                  all_segments = []
+                  all_segments_scripts = []
+                  max_time = 0
+                  for segid in range(0,len(segments)):
+                      logger.info("STARTING")
+                      all_segments_time = 0
+                      all_segments += segments[segid].split(",")
+                      for seg in segments[segid].split(","):
+                        all_segments_scripts.append(seg.split(":")[0])
+                        all_segments_time += int(seg.split(":")[1])
+                      if max_time < all_segments_time:
+                        max_time = all_segments_time
+                      step_function_input = workflow_list(timestamp, len(segments), segid, segments[segid].split(","), bucket_name)
+                      logger.info(json.dumps(step_function_input))
+                      response = step_function_client.start_execution(stateMachineArn=state_machine_arn,
+                                                                              input=json.dumps(step_function_input))
+                      logger.info(response)
+                  try: 
+                      response = step_function_client.start_execution(stateMachineArn=state_machine_agg_arn,
+                                                                    input=json.dumps({"scripts":all_segments_scripts, "max_time": max_time, 
+                                                                                      "wait_time": max_time/20, "wait" : 20, "timestamp" : timestamp}))
+                      logger.info(response)
+                  except Exception as e:
+                    logger.info(repr(e))
+              except Exception as e:
+                    logger.info(repr(e))
+
+
+
+  CFLambdaFunctionRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      Description: IAM Role for lambda to execute the Step Function
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: LambdaInvokePolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt  LambdaInvokeStepFunction.Arn
+        - PolicyName: LambdaCloudFormationPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:*
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:s3:::cloudformation-custom-resource-response-${AWS::Region}'
+                  - !Sub 'arn:${AWS::Partition}:s3:::cloudformation-waitcondition-${AWS::Region}'
+                  - !Sub 'arn:${AWS::Partition}:s3:::cloudformation-custom-resource-response-${AWS::Region}/*'
+                  - !Sub 'arn:${AWS::Partition}:s3:::cloudformation-waitcondition-${AWS::Region}/*'
+        - PolicyName: lam2rol-XRayPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                  - xray:GetSamplingRules
+                  - xray:GetSamplingTargets
+                Resource:
+                  - '*'
+
+  CFLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: Lambda to execute the step function
+      Handler: index.lambda_handler
+      Runtime: python3.10
+      Architectures:
+        - x86_64
+      Layers:
+        - !Sub arn:${AWS::Partition}:lambda:${AWS::Region}:017000801446:layer:AWSLambdaPowertoolsPythonV2:71
+      Role: !GetAtt CFLambdaFunctionRole.Arn
+      Timeout: 600
+      Environment:
+        Variables: 
+          LAMBDA_ARN: !Ref LambdaInvokeStepFunction
+          POWERTOOLS_LOG_LEVEL: INFO
+          POWERTOOLS_SERVICE_NAME: LambdaRolesL2
+      Code:
+        ZipFile: |
+          import boto3
+          import traceback
+          import json
+          import os
+          from datetime import datetime
+          from aws_lambda_powertools import Logger
+          from aws_lambda_powertools.utilities.typing import LambdaContext
+          import cfnresponse
+          lambda_arn = os.environ["LAMBDA_ARN"]
+          client = boto3.client('lambda')
+          logger = Logger()
+          @logger.inject_lambda_context
+          def lambda_handler(event, context):
+              #logger.info(event)
+              res = {}
+              if event['RequestType'] != 'Delete':
+                  try:
+                      response = client.invoke(
+                                FunctionName=lambda_arn,
+                                InvocationType='Event', 
+                                ClientContext='',
+                                Payload=json.dumps({}).encode('utf-8')
+                                )
+                      logger.info(response)
+                  except Exception as e:
+                      logger.info(repr(e))
+                      print(traceback.format_exc())
+                      cfnresponse.send(event, context, cfnresponse.FAILED, input)
+                      raise
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, res)
+
+  ScheduledRule: 
+    Type: AWS::Events::Rule
+    Properties: 
+      Description: Scheduled rule to trigger the lambda function
+      ScheduleExpression: !Ref CronExpression
+      State: !Ref CronStatus
+      Targets: 
+        - 
+          Arn: !GetAtt  LambdaInvokeStepFunction.Arn
+          Id: "WorkflowInvocationLambda"
+  
+  PermissionForEventsToInvokeLambda: 
+    Type: AWS::Lambda::Permission
+    Properties: 
+      FunctionName: !Ref LambdaInvokeStepFunction
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: !GetAtt ScheduledRule.Arn
+
+
+Outputs: 
+
+    LambdaInvokeStepFunctionName:
+      Description: The FunctionName of the lambda that invokes ssf
+      Value: !Ref LambdaInvokeStepFunction
+
+    CFLambdaFunctionName:
+      Description: The FunctionName of the lambda that executes cfn
+      Value: !Ref CFLambdaFunction
+
+    ScheduledRuleArn:
+      Description: The ARN of the scheduled rule
+      Value: !GetAtt ScheduledRule.Arn
