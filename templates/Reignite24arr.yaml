@@ -227,10 +227,10 @@ Resources:
                   - |
                     arn:${AWS::Partition}:s3:::${BnL}
                     arn:${AWS::Partition}:s3:::${BnL}/*
-                    arn:${AWS::Partition}:s3:::${BnL}/${ScriptPath}*
-                    arn:${AWS::Partition}:s3:::${BnL}/${LayerPath}*
-                    arn:${AWS::Partition}:s3:::${BnL}/${TemplatesPath}*
-                    arn:${AWS::Partition}:s3:::${BnL}/${ConfigPath}*
+                    arn:${AWS::Partition}:s3:::${BnL}/${ScriptPath}/*
+                    arn:${AWS::Partition}:s3:::${BnL}/${LayerPath}/*
+                    arn:${AWS::Partition}:s3:::${BnL}/${TemplatesPath}/*
+                    arn:${AWS::Partition}:s3:::${BnL}/${ConfigPath}/*
                   - BnL: !Ref S3BucketLocal
                     ScriptPath: !FindInMap [VariableMap, ScriptPath, Value]
                     LayerPath: !FindInMap [VariableMap, LayerPath, Value]
