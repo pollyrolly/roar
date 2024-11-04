@@ -801,8 +801,9 @@ Resources:
 Outputs:
     LambdaInvokeStepFunctionName:
       Description: The FunctionName of the lambda that invokes ssf
-      Value: !Ref NestedStackSFLayer1.Outputs.LambdaInvokeStepFunction
+      Value: !Ref NestedStackLambdasL2.Outputs.LambdaInvokeStepFunctionName
 
     ScheduledRuleName:
       Description: The Name of the scheduled rule
-      Value: !Ref NestedStackSFLayer1.Outputs.ScheduledRuleName
+      Value: !Ref NestedStackLambdasL2.Outputs.ScheduledRuleName
+
