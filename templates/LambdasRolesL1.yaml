@@ -633,14 +633,14 @@ Resources:
               
               for script in scripts:
                   if script in script_string:
-                    pass
+                      pass
                   else:
-                    return {
-                        'statusCode': 200,
-                        'body': {"scripts" : scripts, "max_time" : max_time, 
-                                'wait' : wait, "wait_time" : wait_time, "timestamp" : timestamp ,
-                                'message' : f'your report was not created due to timeout. Consult data in  s3://{bucket_name}/{html_path}{timestamp}/'}
-                    }
+                      return {
+                          'statusCode': 200,
+                          'body': {"scripts" : scripts, "max_time" : max_time, 
+                                  'wait' : wait, "wait_time" : wait_time, "timestamp" : timestamp ,
+                                  'message' : f'your report was not created due to timeout. Consult data in  s3://{bucket_name}/{html_path}{timestamp}/'}
+                      }
 
               data = s3.get_object( Bucket=bucket_name, Key=f'{config_path}review_config.json')
               json_data = json.load(data['Body'])
@@ -733,14 +733,16 @@ Resources:
                   html_data = html_data.replace("tabtext_" + strTabCount, htmloutput)
                   print('f ' + filename)
                   html_data = html_data.replace("Tab_"+ strTabCount, (filename.split("/")[-1]).split(".")[0])
+                  
+                  print(html_data)
 
                   html_data = html_data.replace("REPLACE_DATE_TIME",display_timestamp)
-                                   
+                                  
                   tabcount=tabcount + 1
                   
-                # s3.put_object(Bucket='lavatest2', Key='output.xlsx')
+              # s3.put_object(Bucket='lavatest2', Key='output.xlsx')
                   
-                # wr.s3.to_excel(df, 's3://lavatest2/results.xlsx', sheet_name='noderesult')
+              # wr.s3.to_excel(df, 's3://lavatest2/results.xlsx', sheet_name='noderesult')
                   
                   
                   #with pd.ExcelWriter('s3://lavatest2/results.xlsx', mode='a') as writer:
@@ -755,8 +757,8 @@ Resources:
               return {
                   'statusCode': 200,
                   'body': {"scripts" : scripts, "max_time" : max_time, 
-                                'wait' : 0, "wait_time" : 0, 
-                                'message' : f'Your report is ready at s3://{bucket_name}/{html_path}{timestamp}/review.html'}
+                              'wait' : 0, "wait_time" : 0, 
+                              'message' : f'Your report is ready at s3://{bucket_name}/{html_path}{timestamp}/review.html'}
               }
 
 Outputs: 

@@ -97,4 +97,5 @@ bazel-out/
 *.swo
 
 only-local/
+scripts.sh
 
