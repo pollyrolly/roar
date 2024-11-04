@@ -91,27 +91,27 @@ Mappings:
 
 Resources:
 
-  CustomMasterKey:
-    Type: AWS::KMS::Key
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties: 
-      Description: "Custom Master Key for encrypting content"
-      Tags:
-        - Key: Application
-          Value: ROAR
-        - Key: Owner
-          Value: TeamROAR
-      KeyPolicy:
-        Version: 2012-10-17
-        Id: key-policy-reignite24
-        Statement:
-          - Sid: Enable IAM User Permissions
-            Effect: Allow
-            Principal:
-              AWS: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:root'
-            Action: 'kms:*'
-            Resource: '*'
+  #CustomMasterKey:
+  #  Type: AWS::KMS::Key
+  #  DeletionPolicy: Retain
+  #  UpdateReplacePolicy: Retain
+  #  Properties: 
+  #    Description: "Custom Master Key for encrypting content"
+  #    Tags:
+  #      - Key: Application
+  #        Value: ROAR
+  #      - Key: Owner
+  #        Value: TeamROAR
+  #   KeyPolicy:
+  #     Version: 2012-10-17
+  #     Id: key-policy-reignite24
+  #     Statement:
+  #       - Sid: Enable IAM User Permissions
+  #         Effect: Allow
+  #         Principal:
+  #           AWS: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:root'
+  #         Action: 'kms:*'
+  #         Resource: '*'
 
 
   ErrorSNSTopic:
@@ -122,7 +122,7 @@ Resources:
       TopicName: !Sub 
         - '${TopicPrefix}-${AWS::AccountId}-${AWS::Region}'
         - TopicPrefix: !FindInMap [VariableMap, ErrorTopicName, Value]
-      KmsMasterKeyId: !GetAtt CustomMasterKey.Arn
+      #KmsMasterKeyId: !GetAtt CustomMasterKey.Arn
       Tags:
         - Key: Application
           Value: ROAR
