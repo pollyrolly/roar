@@ -660,7 +660,7 @@ Resources:
   NestedStackSFLayer1:
     Type: AWS::CloudFormation::Stack
     DependsOn:
-      - AuthorizeFunction
+      - CopyFunction
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
