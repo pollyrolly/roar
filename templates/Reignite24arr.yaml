@@ -516,7 +516,7 @@ Resources:
                       raise
                   return True
 
-              def find_all_prefixes(bucket_name):
+              def find_all_prefixes(self, bucket_name):
                   """
                   Find all prefixes in the specified S3 bucket.
                   
@@ -601,11 +601,11 @@ Resources:
                       logger.info(event['RequestType'])            
                       responseData = {}
                       try:
-                          all_prefixes = find_all_prefixes(destination_bucket)      
+                          all_prefixes = self.find_all_prefixes(destination_bucket)      
                           if all_prefixes:
                               logger.info("Prefixes found in the bucket:")
                               for prefix in all_prefixes:
-                                  delete_prefix(prefix)
+                                  self.delete_prefix(prefix)
                           else:
                               logger.info("No prefixes.")
                           status = True
