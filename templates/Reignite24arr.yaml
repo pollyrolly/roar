@@ -223,15 +223,14 @@ Resources:
                   - s3:GetBucketLocation
                   - s3:ListBucket
                   - s3:PutObject
-                Resource: !Sub 
-                  - |
-                    arn:${AWS::Partition}:s3:::${BnL}
-                    arn:${AWS::Partition}:s3:::${BnL}/*
-                    arn:${AWS::Partition}:s3:::${BnL}/${ScriptPath}/*
-                    arn:${AWS::Partition}:s3:::${BnL}/${LayerPath}/*
-                    arn:${AWS::Partition}:s3:::${BnL}/${TemplatesPath}/*
-                    arn:${AWS::Partition}:s3:::${BnL}/${ConfigPath}/*
-                  - BnL: !Ref S3BucketLocal
+                Resource:
+                  - !Sub arn:${AWS::Partition}:s3:::${BnL}
+                  - !Sub arn:${AWS::Partition}:s3:::${BnL}/*
+                  - !Sub arn:${AWS::Partition}:s3:::${BnL}/${ScriptPath}/*
+                  - !Sub arn:${AWS::Partition}:s3:::${BnL}/${LayerPath}/*
+                  - !Sub arn:${AWS::Partition}:s3:::${BnL}/${TemplatesPath}/*
+                  - !Sub arn:${AWS::Partition}:s3:::${BnL}/${ConfigPath}/*
+                  - {BnL: !Ref S3BucketLocal}
                     ScriptPath: !FindInMap [VariableMap, ScriptPath, Value]
                     LayerPath: !FindInMap [VariableMap, LayerPath, Value]
                     TemplatesPath: !FindInMap [VariableMap, TemplatesPath, Value]
