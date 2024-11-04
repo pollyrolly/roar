@@ -249,7 +249,7 @@ Resources:
                   - !Sub 'arn:${AWS::Partition}:s3:::cloudformation-waitcondition-${AWS::Region}/*'
 
 
-  LambdaAuthorizeCopyFunction:
+  LambdaCopyFunction:
     Type: AWS::Lambda::Function
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
@@ -640,8 +640,8 @@ Resources:
 
           signal.signal(signal.SIGALRM, timeout_handler)
 
-  AuthorizeFunction:
-    Type: Custom::AuthorizeFunction
+  CopyFunction:
+    Type: Custom::CopyFunction
     DeletionPolicy: Delete
     DependsOn: 
       - S3BucketLocal
@@ -655,7 +655,7 @@ Resources:
           Value: TeamROAR
       ServiceToken: !Sub 
       - arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaAuthorize}
-      - {LambdaAuthorize: !Ref LambdaAuthorizeFunction}
+      - {LambdaAuthorize: !Ref LambdaCopyFunction}
 
   NestedStackSFLayer1:
     Type: AWS::CloudFormation::Stack
