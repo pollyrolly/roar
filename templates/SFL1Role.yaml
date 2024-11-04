@@ -46,15 +46,22 @@ Resources:
 
   StateMachineL1LogGroup: 
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties: 
       RetentionInDays: 7
+
   StateMachineL1LogEHGroup: 
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties: 
       RetentionInDays: 7
   
   LambdaReadDataRole:
     Type: AWS::IAM::Role
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties: 
       Description: IAM Role for LambdaReadData
       AssumeRolePolicyDocument:
@@ -123,6 +130,8 @@ Resources:
   
   StateMachineL1Role:
     Type: AWS::IAM::Role
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       Description : IAM Role for SF_L1
       AssumeRolePolicyDocument:
@@ -247,6 +256,8 @@ Resources:
 
   SampleManagedPolicy:
     Type: 'AWS::IAM::ManagedPolicy'
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       PolicyDocument:
         Version: '2012-10-17'
@@ -263,6 +274,8 @@ Resources:
 
   LambdaReadData:
     Type: AWS::Lambda::Function
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties: 
       Description: Lambda to read data from Redshift
       Handler: index.lambda_handler
@@ -391,6 +404,8 @@ Resources:
 
   SFLayer1:
     Type: AWS::StepFunctions::StateMachine
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       DefinitionString: !Sub 
         - |-
@@ -592,6 +607,8 @@ Resources:
 
   SFLayer1ErrorHandling:
     Type: AWS::StepFunctions::StateMachine
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       DefinitionString: !Sub 
         - |-

@@ -73,6 +73,8 @@ Metadata:
 Resources:
   LambdaInvokeStepFunctionRole:
     Type: AWS::IAM::Role
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties: 
       Description: IAM Role for lambda to execute the Step Function
       AssumeRolePolicyDocument:
@@ -142,6 +144,8 @@ Resources:
 
   LambdaInvokeStepFunction:
     Type: AWS::Lambda::Function
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       Description: Lambda to execute the step function
       Handler: index.lambda_handler
@@ -269,6 +273,8 @@ Resources:
 
   CFLambdaFunctionRole:
     Type: AWS::IAM::Role
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties: 
       Description: IAM Role for lambda to execute the Step Function
       AssumeRolePolicyDocument:
@@ -320,6 +326,8 @@ Resources:
 
   CFLambdaFunction:
     Type: AWS::Lambda::Function
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       Description: Lambda to execute the step function
       Handler: index.lambda_handler
@@ -367,8 +375,12 @@ Resources:
                       cfnresponse.send(event, context, cfnresponse.FAILED, input)
                       raise
               cfnresponse.send(event, context, cfnresponse.SUCCESS, res)
+  
+  
   ScheduledRule: 
     Type: AWS::Events::Rule
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties: 
       Description: Scheduled rule to trigger the lambda function
       ScheduleExpression: !Ref CronExpression
@@ -378,7 +390,9 @@ Resources:
           Arn: !GetAtt  LambdaInvokeStepFunction.Arn
           Id: "WorkflowInvocationLambda"
   
-  PermissionForEventsToInvokeLambda: 
+  PermissionForEventsToInvokeLambda:
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete 
     Type: AWS::Lambda::Permission
     Properties: 
       FunctionName: !Ref LambdaInvokeStepFunction

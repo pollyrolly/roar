@@ -43,11 +43,15 @@ Metadata:
 Resources:
   StateMachineL2LogGroup: 
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties: 
       RetentionInDays: 7
 
   StateMachineL2Role:
     Type: 'AWS::IAM::Role'
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       Description : IAM Role for SF_L2
       AssumeRolePolicyDocument:
@@ -134,6 +138,8 @@ Resources:
                   - '*'
   SFLayer2:
     Type: AWS::StepFunctions::StateMachine
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       DefinitionString: !Sub 
         - |-

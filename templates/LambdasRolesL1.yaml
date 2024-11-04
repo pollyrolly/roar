@@ -51,6 +51,8 @@ Metadata:
 Resources:
   LambdaWorkflowRole:
     Type: AWS::IAM::Role
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties: 
       Description: IAM Role for LambdaWorkflow
       AssumeRolePolicyDocument:
@@ -69,6 +71,8 @@ Resources:
 
   LambdaCreateOutputRole:
     Type: AWS::IAM::Role
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties: 
       Description: IAM Role for LambdaCreateOutput
       AssumeRolePolicyDocument:
@@ -116,6 +120,8 @@ Resources:
 
   LambdaCreateHTMLRole:
     Type: AWS::IAM::Role
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties: 
       Description: IAM Role for LambdaCreateHTML
       AssumeRolePolicyDocument:
@@ -167,6 +173,8 @@ Resources:
 
   LambdaProcessResultsRole:
     Type: AWS::IAM::Role
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties: 
       Description: IAM Role for LambdaProcessResults
       AssumeRolePolicyDocument:
@@ -215,6 +223,8 @@ Resources:
   
   LambdaHTMLLayer:
     Type: AWS::Lambda::LayerVersion
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       CompatibleArchitectures: 
         - x86_64
@@ -231,6 +241,8 @@ Resources:
   
   PermissionHTMLLayer:
     Type: AWS::Lambda::LayerVersionPermission
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       Action: lambda:GetLayerVersion
       LayerVersionArn: !Ref LambdaHTMLLayer
@@ -239,6 +251,8 @@ Resources:
 
   LambdaWorkflow:
     Type: AWS::Lambda::Function
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties: 
       Description: Lambda to execute the step function
       Handler: index.lambda_handler
@@ -320,6 +334,8 @@ Resources:
 
   LambdaCreateOutput:
     Type: AWS::Lambda::Function
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties: 
       Description: Lambda to execute the step function
       Handler: index.lambda_handler
@@ -417,6 +433,8 @@ Resources:
 
   LambdaProcessResults:
     Type: AWS::Lambda::Function
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties: 
       Description: Lambda to execute the step function
       Handler: index.lambda_handler
@@ -549,6 +567,8 @@ Resources:
 
   LambdaCreateHTML:
     Type: AWS::Lambda::Function
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties: 
       Description: Lambda to create HTML output for the review
       Handler: index.lambda_handler

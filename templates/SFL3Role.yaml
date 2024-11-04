@@ -73,6 +73,8 @@ Resources:
 
   StateMachineL3Role:
     Type: 'AWS::IAM::Role'
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       Description : IAM Role for SF_L1
       AssumeRolePolicyDocument:
@@ -317,6 +319,8 @@ Resources:
 
   SFLayer3Html:
     Type: AWS::StepFunctions::StateMachine
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       DefinitionString: !Sub 
         - |-
