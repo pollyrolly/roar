@@ -87,7 +87,7 @@ Mappings:
     RoleArn:
       Value: arn:aws:iam::603836437137:role/reignite24-read-global
     Repo:
-      Value:  https://github.com/pollyrolly/roar.git
+      Value: https://github.com/pollyrolly/roar.git
 
 Resources:
 
@@ -299,6 +299,7 @@ Resources:
           import cfnresponse
           import os
           import subprocess
+          import signal
           from aws_lambda_powertools import Logger
           from aws_lambda_powertools.utilities.typing import LambdaContext
           logger = Logger()       
@@ -318,7 +319,7 @@ Resources:
                   self.s3_resource = None
                   self.global_s3_handles()
                   self.local_s3_handles()
-                  self.account_id = self.account_id()
+                  self.account_id = self.accountid()
                   self.templates_prefix = templates_prefix
                   self.customer_prefix = "eecustomers/"
                   self.config_prefix = config_prefix
@@ -410,10 +411,10 @@ Resources:
                   except Exception as e:
                       self.logger.error(f"Error writing string to local bucket: {e}")
                       return False
-               
-              def get_config_from_clone():    
+              
+              def get_config_from_clone(self):    
                   with open("/tmp/roar/config/review_config.json","r",) as f:
-                  return json.load(f)
+                      return json.load(f)
 
               def from_global(self, key):
                   try:
@@ -425,12 +426,12 @@ Resources:
                       self.logger.error(f"Error getting object from S3: {e}")
 
 
-              def filename_from_key(key):
+              def filename_from_key(self,key):
                   filename = key.split("/")[-1]
                   return filename
 
 
-              def lambda_tmp():
+              def lambda_tmp(self):
                   return "/tmp"
 
 
@@ -474,34 +475,34 @@ Resources:
                       self.config = ""
                       return False
 
-              def get_accountid():
+              def accountid(self):
                   sts = boto3.client("sts")
                   identity = sts.get_caller_identity()
                   account_id = identity["Account"]
                   return account_id
               
-               def no_authorize_and_copy(self):
+              def no_authorize_and_copy(self):
                   try:
-                      clone_repo(github_repo_url, "/tmp"")
+                      self.clone_repo( "/tmp")
                       bucket_name = self.target_bucket
                       local_directory = "/tmp/roar/config"
                       prefix ="config"
-                      upload_files_to_s3(local_directory, prefix, bucket_name)
+                      self.upload_files_to_s3(local_directory, prefix, bucket_name)
                       local_directory = "/tmp/roar/layer"
                       prefix ="layer"
-                      upload_files_to_s3(local_directory, prefix, bucket_name)
+                      self.upload_files_to_s3(local_directory, prefix, bucket_name)
                       local_directory = "/tmp/roar/templates"
                       prefix ="templates"
-                      upload_files_to_s3(local_directory, prefix, bucket_name)
+                      self.upload_files_to_s3(local_directory, prefix, bucket_name)
                       response = self.s3_client_g.list_objects_v2(Bucket=self.source_bucket, Prefix=self.templates_prefix)
                   except:
                       self.logger.error(traceback.format_exc())
+                      cfnresponse.send(event, context, cfnresponse.FAILED, {})
                       return False
-                      #cfnresponse.send(event, context, cfnresponse.FAILED, {})
-                      #raise   
+                      raise   
                   try:
                       #extract SQL and write to destination bucket
-                      config_json = get_config_from_clone()
+                      config_json = self.get_config_from_clone()
                       sections = []
                       for section in config_json["Sections"]:
                           sections.append(section)
@@ -510,61 +511,36 @@ Resources:
                           self.to_local(sql_script, f"{self.script_prefix}{section}.sql")                           
                   except:
                       self.logger.error(traceback.format_exc())
+                      cfnresponse.send(event, context, cfnresponse.FAILED, {})
                       return False
-                      #cfnresponse.send(event, context, cfnresponse.FAILED, {})
-                      #raise
+                      raise
                   return True
 
+              def find_all_prefixes(bucket_name):
+                  """
+                  Find all prefixes in the specified S3 bucket.
+                  
+                  :param bucket_name: The name of the S3 bucket
+                  :return: A list of all prefixes in the bucket
+                  """
+                  s3 = boto3.client('s3')
+                  prefixes = set()
 
-              def authorize_and_copy(self):
                   try:
-                      response = self.s3_client_g.list_objects_v2(Bucket=self.source_bucket, Prefix=self.templates_prefix)
-                      for obj in response.get('Contents', []):
-                          copy_source = self.from_global(obj['Key'])
-                          response = self.to_local(copy_source, obj['Key'])
-                  except:
-                      self.logger.error(traceback.format_exc())
-                      return False
-                      #cfnresponse.send(event, context, cfnresponse.FAILED, {})
-                      #raise                                           
-                  try:
-                      response = self.s3_client_g.list_objects_v2(Bucket=self.source_bucket, Prefix=self.config_prefix)
-                      for obj in response.get('Contents', []):
-                          copy_source = self.from_global(obj['Key'])
-                          response = self.to_localcopy_source, (obj['Key'])
-                  except:
-                      self.logger.error(traceback.format_exc())
-                      return False
-                      #cfnresponse.send(event, context, cfnresponse.FAILED, {})
-                      #raise
-                  try:
-                      #extract SQL and write to destination bucket
-                      config_json = json.loads(self.config)
-                      sections = []
-                      for section in config_json["Sections"]:
-                          sections.append(section)
-                      for section in sections:
-                          sql_script = config_json["Sections"][section]["SQL"]
-                          self.to_local(sql_script, f"{self.script_prefix}{section}.sql")                           
-                  except:
-                      self.logger.error(traceback.format_exc())
-                      return False
-                      #cfnresponse.send(event, context, cfnresponse.FAILED, {})
-                      #raise
-                  try:
-                      response = s3_client_g.list_objects_v2(Bucket=self.source_bucket, Prefix=self.layer_prefix)
-                      for obj in response.get('Contents', []):
-                          self.logger.debug(self.source_bucket)
-                          self.logger.debug(obj['Key'])
-                          if obj['Key'] != self.layer_prefix:
-                              self.download_global(obj['Key'])
-                              self.upload_local(obj['Key'])
-                  except:
-                      self.logger.error(traceback.format_exc())
-                      return False
-                      #cfnresponse.send(event, context, cfnresponse.FAILED, {})
-                      #raise 
-                  return True
+                      # Use paginator to handle buckets with a large number of objects
+                      paginator = s3.get_paginator('list_objects_v2')
+                      page_iterator = paginator.paginate(Bucket=bucket_name, Delimiter='/')
+
+                      for page in page_iterator:
+                          if 'CommonPrefixes' in page:
+                              for prefix in page['CommonPrefixes']:
+                                  prefixes.add(prefix['Prefix'])
+
+                      return list(prefixes)
+
+                  except ClientError as e:
+                      print(f"An error occurred: {e}")
+                      return []
 
               # delete all objects under prefix in s3
               def delete_prefix(self, prefix):
@@ -582,9 +558,10 @@ Resources:
           def lambda_handler(event, context):
               '''Handle Lambda event from AWS'''
               # Setup alarm for remaining runtime minus a second
-              signal.alarm((context.get_remaining_time_in_millis() / 1000) - 1)
+              signal.alarm(int(context.get_remaining_time_in_millis() / 1000) - 1)
 
               logger.debug(event)
+              
               logger.debug(context)
               role_arn = os.environ['ROLE_ARN']
               source_bucket = os.environ['SOURCE_BUCKET']
@@ -595,64 +572,62 @@ Resources:
               templates_prefix = os.environ['TEMPLATES_PREFIX'] 
 
               acp = AuthorizeAndCopy(role_arn=role_arn,
-                                    source_bucket=source_bucket,
-                                    destination_bucket=destination_bucket,
-                                    config_prefix=config_prefix,
-                                    script_prefix=script_prefix,
-                                    layer_prefix=layer_prefix,
-                                    templates_prefix=templates_prefix,
-                                    logger=logger)
+                                  source_bucket=source_bucket,
+                                  target_bucket=destination_bucket,
+                                  config_prefix=config_prefix,
+                                  script_prefix=script_prefix,
+                                  layer_prefix=layer_prefix,
+                                  templates_prefix=templates_prefix,
+                                  logger=logger)
 
               response = {}
               try:
-                  logger.info('REQUEST RECEIVED:\n %s', event)
-                  logger.info('REQUEST RECEIVED:\n %s', context)
-                  if event['RequestType'] == 'Create':
+                  logger.info('REQUEST RECEIVED EVENT:\n %s', event)
+                  logger.info('REQUEST RECEIVED CONTEXT:\n %s', context)
+                  if event['RequestType'] == 'Create' or event['RequestType'] == 'Update' :
                       logger.info('CREATE!')
-                      #status = acp.autorize_and_copy() 
-                      status = acp.no_autorize_and_copy() 
+                      status = acp.no_authorize_and_copy() 
                       responseData = {}
                       if status:
                           responseData['Data'] = f"Resource creation successful!"
                           cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, "CustomResourcePhysicalID")
+                          return
                       else:
                           responseData['Data'] = f"Account not authorized for deployment"
                           cfnresponse.send(event, context, cfnresponse.FAILED, responseData, "CustomResourcePhysicalID")
+                          raise
                           logger.error("Not authorised")
-
-                  elif event['RequestType'] == 'Update':
-                  #    logger.info('UPDATE!')
-                  #    acp.delete_prefix(acp.templates_prefix)
-                  #    acp.delete_prefix(acp.config_prefix)
-                  #    acp.delete_prefix(acp.script_prefix)
-                  #
-                  #    status = acp.autorize_and_copy() 
-                  #    responseData = {}
-                  #    if status:
-                  #        responseData['Data'] = f"Resource update successful!"
-                  #        cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, "CustomResourcePhysicalID")
-                  #    else:
-                  #        responseData['Data'] = f"Account not authorized for deployment"
-                  #        cfnresponse.send(event, context, cfnresponse.FAILED, responseData, "CustomResourcePhysicalID")
-                  #        logger.error("Not authorised")
-
                   elif event['RequestType'] == 'Delete':
-                      logger.info('DELETE!')            
+                      logger.info(event['RequestType'])            
                       responseData = {}
-                      status = True
+                      try:
+                          all_prefixes = find_all_prefixes(destination_bucket)      
+                          if all_prefixes:
+                              logger.info("Prefixes found in the bucket:")
+                              for prefix in all_prefixes:
+                                  delete_prefix(prefix)
+                          else:
+                              logger.info("No prefixes.")
+                          status = True
+                      except Exception as e:
+                          status = False
+                          logger.error(repr(e))
                       if status:
                           responseData['Data'] = f"Resource deletion successful!"
                           cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, "CustomResourcePhysicalID")
+                          return
                       else:
                           responseData['Data'] = f"Resource deletion failed"
                           cfnresponse.send(event, context, cfnresponse.FAILED, responseData, "CustomResourcePhysicalID")
                           logger.error("Deletion error")
+                          raise
                   else:
                       logger.info('FAILED!')
                       responseData = {}
                       responseData['Data'] = f"Unexpected event from cloudFormation"
                       cfnresponse.send(event, context, cfnresponse.FAILED, responseData, "CustomResourcePhysicalID")
                       logger.error(responseData['Data'])
+                      raise
               except: #pylint: disable=W0702
                   logger.info('FAILED!')
                   responseData = {}

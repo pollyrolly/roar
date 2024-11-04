@@ -367,7 +367,6 @@ Resources:
                       cfnresponse.send(event, context, cfnresponse.FAILED, input)
                       raise
               cfnresponse.send(event, context, cfnresponse.SUCCESS, res)
-
   ScheduledRule: 
     Type: AWS::Events::Rule
     Properties: 
