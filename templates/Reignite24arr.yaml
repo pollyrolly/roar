@@ -36,7 +36,12 @@ Parameters:
   Trigger:
     Description: The parameter to trigger the new review. Should be different from the last.
     Type: String
-    Default: "1"
+    Default: "0"
+  
+  Update:
+    Description: The parameter to trigger the new update. Should be different from the last.
+    Type: String
+    Default: "0"
 
 
 Metadata:
@@ -654,7 +659,7 @@ Resources:
       ServiceToken: !Sub 
       - arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaAuthorize}
       - {LambdaAuthorize: !Ref LambdaCopyFunction}
-      TimeStamp: !Ref Trigger
+      Update: !Ref Update
 
   NestedStackSFLayer1:
     Type: AWS::CloudFormation::Stack
@@ -796,7 +801,7 @@ Resources:
       ServiceToken: !Sub 
       - arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaSF}
       - {LambdaSF: !GetAtt NestedStackLambdasL2.Outputs.CFLambdaFunctionName}
-      TimeStamp:  !Ref Trigger
+      Trigger:  !Ref Trigger
 
 Outputs:
     LambdaInvokeStepFunctionName:
