@@ -1,0 +1,26 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: "CFN stack for creating an agent"
+Resources:
+   ExampleAgentResource:
+      Type: AWS::Bedrock::Agent
+      Properties:
+        AgentName: "Example Agent"
+        AgentResourceRoleArn: "arn:aws:iam::123456789012:role/AmazonBedrockExecutionRoleForAgents_user"
+        FoundationModel: "anthropic.claude-v2"
+        Instruction: "You are an IT agent who solves customer's problems"
+        Description: "Description is here"
+        IdleSessionTTLInSeconds: 900
+        CustomerEncryptionKeyArn: "arn:aws:kms:us-west-2:123456789012:key/1234abcd-ab12-34cd-56ef-abcdefg123456"
+        ActionGroups:
+          - ActionGroupName: "IT Action"
+            Description: "Testing latest IT Management action"
+            ActionGroupExecutor:
+              Lambda: "arn:aws:lambda:us-west-2:123456789012:function:ItAgentLambda"
+            ApiSchema:
+              S3:
+                S3BucketName: "apischema-s3"
+                S3ObjectKey: "ApiSchema.json"
+        KnowledgeBases:
+          - KnowledgeBaseId: "1234567890"
+            Description: "IT Knowledge Base"
+            KnowledgeBaseState: ENABLED
